@@ -9,10 +9,30 @@ import SwiftUI
 
 struct HomeView: View {
     // 目標管理用のデータ（currentDistance は HealthKit から取得）
-    @State private var currentDistance: Double = 0.0
-    @State private var goalDistance: Double = 100.0
-    @State private var isHealthKitLoading = true
+    @State private var currentDistance: Double
+    @State private var goalDistance: Double
+    @State private var isHealthKitLoading: Bool
     @State private var healthKitError: String?
+    
+    /// プレビュー用: true のときは onAppear で HealthKit を読まない
+    private let usePreviewData: Bool
+    
+    @State private var showRunHistory = false
+    @ObservedObject private var conversationManager = ConversationManager.shared
+    
+    init(
+        currentDistance: Double = 0.0,
+        goalDistance: Double = 100.0,
+        isHealthKitLoading: Bool = true,
+        healthKitError: String? = nil,
+        usePreviewData: Bool = false
+    ) {
+        _currentDistance = State(initialValue: currentDistance)
+        _goalDistance = State(initialValue: goalDistance)
+        _isHealthKitLoading = State(initialValue: isHealthKitLoading)
+        _healthKitError = State(initialValue: healthKitError)
+        self.usePreviewData = usePreviewData
+    }
     
     // 進捗率（0.0〜1.0）
     var progress: CGFloat {
@@ -45,7 +65,7 @@ struct HomeView: View {
             
             Spacer()
             
-            // 2. 月間目標進捗 (％表示)
+            // 2. 月間目標進捗 (％表示) — タップで走行履歴
             VStack(spacing: 15) {
                 ZStack {
                     Circle()
@@ -91,13 +111,20 @@ struct HomeView: View {
                                 .padding(.horizontal)
                         }
                     }
+                    .contentShape(Rectangle())
+                }
+                .onTapGesture {
+                    if !isHealthKitLoading { showRunHistory = true }
                 }
                 
-                Text("MONTHLY GOAL")
+                Text("MONTHLY GOAL（タップで履歴）")
                     .font(.caption)
                     .fontWeight(.bold)
                     .foregroundColor(.gray)
                     .tracking(2)
+            }
+            .sheet(isPresented: $showRunHistory) {
+                RunHistoryListView()
             }
             
             Spacer()
@@ -125,8 +152,31 @@ struct HomeView: View {
             .padding(.bottom, 50)
         }
         .background(Color.white)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink(destination: MessageListView()) {
+                    ZStack(alignment: .topTrailing) {
+                        Image(systemName: "message.fill")
+                            .font(.system(size: 20))
+                            .foregroundColor(Color(hex: "0F1A2E"))
+                        if conversationManager.unreadCount > 0 {
+                            Text("\(min(conversationManager.unreadCount, 99))")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(.white)
+                                .padding(4)
+                                .background(Circle().fill(Color.red))
+                                .offset(x: 8, y: -8)
+                        }
+                    }
+                }
+            }
+        }
         .onAppear {
-            loadDistanceFromHealthKit()
+            if !usePreviewData {
+                loadDistanceFromHealthKit()
+            }
+            conversationManager.refreshUnreadCount()
         }
     }
     
@@ -152,6 +202,15 @@ struct HomeView: View {
     }
 }
 
-#Preview {
+#Preview("通常（読み込み中）") {
     HomeView()
+}
+
+#Preview("サンプル値") {
+    HomeView(
+        currentDistance: 45.2,
+        goalDistance: 100.0,
+        isHealthKitLoading: false,
+        usePreviewData: true
+    )
 }

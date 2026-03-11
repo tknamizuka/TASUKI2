@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import AVFoundation // 追加
 import FirebaseCore
 import FirebaseAuth
@@ -16,7 +17,23 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         FirebaseApp.configure()
+        configureTabBarAppearance()
         return true
+    }
+    
+    /// タブバーの見た目を統一（MainTabView の init で行うとクラッシュするためここで実行）
+    private func configureTabBarAppearance() {
+        let appearance = UITabBarAppearance()
+        appearance.configureWithOpaqueBackground()
+        appearance.backgroundColor = UIColor.white
+        let itemAppearance = UITabBarItemAppearance()
+        itemAppearance.normal.iconColor = UIColor.gray
+        itemAppearance.selected.iconColor = UIColor(red: 15/255, green: 26/255, blue: 46/255, alpha: 1.0)
+        itemAppearance.normal.titleTextAttributes = [.foregroundColor: UIColor.gray]
+        itemAppearance.selected.titleTextAttributes = [.foregroundColor: UIColor(red: 15/255, green: 26/255, blue: 46/255, alpha: 1.0)]
+        appearance.stackedLayoutAppearance = itemAppearance
+        UITabBar.appearance().standardAppearance = appearance
+        UITabBar.appearance().scrollEdgeAppearance = appearance
     }
 }
 

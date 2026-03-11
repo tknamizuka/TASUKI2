@@ -14,6 +14,19 @@ enum SortOption: String, CaseIterable {
     case distance = "距離が近い順"
 }
 
+// MARK: - Rank Order (S=0 が最上)
+private func rankOrderIndex(_ rankLabel: String) -> Int {
+    let r = rankLabel.replacingOccurrences(of: "Rank ", with: "").uppercased()
+    switch r {
+    case "S": return 0
+    case "A": return 1
+    case "B": return 2
+    case "C": return 3
+    case "D": return 4
+    default: return 5
+    }
+}
+
 struct FindView: View {
     @State private var selectedMode: String = "Runners"  // "Runners" or "Practices"
     @State private var searchText: String = ""
@@ -34,11 +47,22 @@ struct FindView: View {
     // 詳細フィルター用のState
     @State private var filterPrefecture: String = "指定なし"
     @State private var filterAgeGroup: String = "指定なし"
+    @State private var filterAgeMin: Int = 20
+    @State private var filterAgeMax: Int = 80
+    @State private var filterRankMode: String = "すべて"  // すべて / 自分より上のみ / 自分と同じ以上 / 自分より下のみ
     @State private var filterActiveTime: String = "指定なし"
     @State private var filterRunningGoal: String = "指定なし"
     @State private var filterPersonalBest: String = "指定なし"
-    @State private var filterEasyPace: String = "指定なし"
+    @State private var filterBestFull: String = "指定なし"
+    @State private var filterBestHalf: String = "指定なし"
+    @State private var filterEasyPace: String = "5:30/km"  // サンプル初期値
     @State private var filterRunSpot: String = ""
+    
+    // 登録時の値（フィルター初期値・表示用）
+    @AppStorage("myRank") private var myRank: String = "Rank B"
+    @AppStorage("myBestFull") private var myBestFull: String = ""
+    @AppStorage("myBestHalf") private var myBestHalf: String = ""
+    @AppStorage("myAvgPace") private var myAvgPace: String = "5:30/km"
     
     // Practices用 詳細フィルター
     @State private var practiceFilterDay: String = "指定なし"
@@ -357,6 +381,23 @@ struct FindView: View {
             filtered = filtered.filter { $0.prefecture.contains(filterPrefecture) }
         }
         
+        // ランク階層フィルター（自分より上/同じ以上/下のみ）
+        if filterRankMode != "すべて" {
+            let myRankIndex = rankOrderIndex(myRank)
+            filtered = filtered.filter { user in
+                let userIndex = rankOrderIndex("Rank \(user.rank)")
+                switch filterRankMode {
+                case "自分より上のみ": return userIndex < myRankIndex
+                case "自分と同じ以上": return userIndex <= myRankIndex
+                case "自分より下のみ": return userIndex > myRankIndex
+                default: return true
+                }
+            }
+        }
+        
+        // 年齢範囲フィルター（20〜80）
+        filtered = filtered.filter { filterAgeMin <= $0.age && $0.age <= filterAgeMax }
+        
         if filterAgeGroup != "指定なし" {
             filtered = filtered.filter { $0.ageGroup == filterAgeGroup }
         }
@@ -425,6 +466,17 @@ struct FindView: View {
                     // その他のペース（3:00, 3:30, 4:00など）
                     return pace.contains(filterEasyPace.replacingOccurrences(of: "/km", with: ""))
                 }
+            }
+        }
+        
+        if filterBestFull != "指定なし" {
+            filtered = filtered.filter { user in
+                user.bestCategory == .full || (user.personalBest != nil && (user.personalBest ?? "").contains(":"))
+            }
+        }
+        if filterBestHalf != "指定なし" {
+            filtered = filtered.filter { user in
+                user.bestCategory == .half || (user.personalBest != nil && (user.personalBest ?? "").contains("1:"))
             }
         }
         
@@ -677,11 +729,20 @@ struct FindView: View {
                     selectedMode: selectedMode,
                     prefecture: $filterPrefecture,
                     ageGroup: $filterAgeGroup,
+                    ageMin: $filterAgeMin,
+                    ageMax: $filterAgeMax,
+                    rankMode: $filterRankMode,
                     activeTime: $filterActiveTime,
                     runningGoal: $filterRunningGoal,
                     personalBest: $filterPersonalBest,
+                    bestFull: $filterBestFull,
+                    bestHalf: $filterBestHalf,
                     easyPace: $filterEasyPace,
                     runSpot: $filterRunSpot,
+                    myRank: myRank,
+                    myBestFull: myBestFull,
+                    myBestHalf: myBestHalf,
+                    myJogPace: myAvgPace.isEmpty ? "5:30/km" : myAvgPace,
                     practiceCategory: $selectedPracticeCategory,
                     practiceDay: $practiceFilterDay,
                     practiceSpot: $practiceFilterSpot,
@@ -693,10 +754,15 @@ struct FindView: View {
                     onClear: {
                         filterPrefecture = "指定なし"
                         filterAgeGroup = "指定なし"
+                        filterAgeMin = 20
+                        filterAgeMax = 80
+                        filterRankMode = "すべて"
                         filterActiveTime = "指定なし"
                         filterRunningGoal = "指定なし"
                         filterPersonalBest = "指定なし"
-                        filterEasyPace = "指定なし"
+                        filterBestFull = "指定なし"
+                        filterBestHalf = "指定なし"
+                        filterEasyPace = "5:30/km"
                         filterRunSpot = ""
                         selectedPracticeCategory = nil
                         practiceFilterDay = "指定なし"
@@ -1186,16 +1252,100 @@ struct RecruitmentPostSheet: View {
     }
 }
 
+// MARK: - Age Range Slider（1本のバーで最小・最大を指定）
+private struct AgeRangeSlider: View {
+    @Binding var ageMin: Int
+    @Binding var ageMax: Int
+    let range: ClosedRange<Int>
+    
+    private let trackHeight: CGFloat = 8
+    private let thumbSize: CGFloat = 24
+    
+    private var rangeSpan: Int { range.upperBound - range.lowerBound }
+    
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            let minFraction = CGFloat(ageMin - range.lowerBound) / CGFloat(rangeSpan)
+            let maxFraction = CGFloat(ageMax - range.lowerBound) / CGFloat(rangeSpan)
+            let minX = minFraction * w
+            let maxX = maxFraction * w
+            
+            ZStack(alignment: .leading) {
+                // 背景バー
+                RoundedRectangle(cornerRadius: trackHeight / 2)
+                    .fill(Color.gray.opacity(0.2))
+                    .frame(height: trackHeight)
+                
+                // 選択範囲（青い部分）
+                RoundedRectangle(cornerRadius: trackHeight / 2)
+                    .fill(Color(hex: "2E5CFF"))
+                    .frame(width: max(0, maxX - minX), height: trackHeight)
+                    .offset(x: minX)
+                
+                // 左つまみ（最小）— 指の位置でバー上の位置を計算
+                Circle()
+                    .fill(Color.white)
+                    .frame(width: thumbSize, height: thumbSize)
+                    .shadow(color: .black.opacity(0.15), radius: 2, x: 0, y: 1)
+                    .overlay(Circle().stroke(Color(hex: "2E5CFF"), lineWidth: 2))
+                    .offset(x: minX - thumbSize / 2)
+                    .contentShape(Rectangle())
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { value in
+                                let fingerXInBar = (minX - thumbSize / 2) + value.location.x
+                                let fraction = max(0, min(1, fingerXInBar / w))
+                                let newMin = range.lowerBound + Int(fraction * CGFloat(rangeSpan))
+                                ageMin = min(max(newMin, range.lowerBound), ageMax)
+                            }
+                    )
+                
+                // 右つまみ（最大）
+                Circle()
+                    .fill(Color.white)
+                    .frame(width: thumbSize, height: thumbSize)
+                    .shadow(color: .black.opacity(0.15), radius: 2, x: 0, y: 1)
+                    .overlay(Circle().stroke(Color(hex: "2E5CFF"), lineWidth: 2))
+                    .offset(x: maxX - thumbSize / 2)
+                    .contentShape(Rectangle())
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { value in
+                                let fingerXInBar = (maxX - thumbSize / 2) + value.location.x
+                                let fraction = max(0, min(1, fingerXInBar / w))
+                                let newMax = range.lowerBound + Int(fraction * CGFloat(rangeSpan))
+                                ageMax = max(min(newMax, range.upperBound), ageMin)
+                            }
+                    )
+            }
+            .frame(height: thumbSize)
+        }
+        .frame(height: 24)
+    }
+}
+
 // MARK: - Filter Detail Sheet
 struct FilterDetailSheet: View {
     let selectedMode: String
     @Binding var prefecture: String
     @Binding var ageGroup: String
-    @Binding var activeTime: String  // スケジュール用（変数名はactiveTimeのまま）
+    @Binding var ageMin: Int
+    @Binding var ageMax: Int
+    @Binding var rankMode: String
+    @Binding var activeTime: String
     @Binding var runningGoal: String
-    @Binding var personalBest: String  // ベストタイム用（変数名はpersonalBestのまま）
+    @Binding var personalBest: String
+    @Binding var bestFull: String
+    @Binding var bestHalf: String
     @Binding var easyPace: String
     @Binding var runSpot: String
+    
+    // 登録時の値（表示・初期値用）
+    var myRank: String = "Rank B"
+    var myBestFull: String = ""
+    var myBestHalf: String = ""
+    var myJogPace: String = "5:30/km"
     
     // Practices用
     @Binding var practiceCategory: PracticeCategory?
@@ -1222,8 +1372,11 @@ struct FilterDetailSheet: View {
     ]
     private let ageGroups = ["指定なし", "20代", "30代", "40代", "50代", "60代以上"]
     private let schedules = ["指定なし", "平日 朝", "平日 夜", "土日 朝", "土日 午前", "土日 午後", "土日 夜", "不定期"]
+    private let rankModes = ["すべて", "自分より上のみ", "自分と同じ以上", "自分より下のみ"]
     private let runningGoals = ["指定なし", "ファンラン", "ダイエット", "サブ3", "サブ4", "自己記録更新"]
     private let bestTimes = ["指定なし", "サブ2.5", "サブ3", "サブ3.5", "サブ4", "サブ5", "完走", "未計測"]
+    private let bestFullOptions = ["指定なし", "サブ2.5", "サブ3", "サブ3.5", "サブ4", "サブ4.5", "サブ5", "完走", "未計測"]
+    private let bestHalfOptions = ["指定なし", "サブ1:10", "サブ1:20", "サブ1:30", "サブ1:40", "サブ2:00", "完走", "未計測"]
     private let easyPaces = [
         "指定なし",
         "4:00/km未満", "4:00/km", "4:30/km",
@@ -1240,7 +1393,19 @@ struct FilterDetailSheet: View {
         NavigationStack {
             Form {
                 if selectedMode == "Runners" {
-                    // A. 基本情報（Runners用）
+                    // ランク（階層型）
+                    Section(header: Text("ランク")) {
+                        Picker("マッチングするランク", selection: $rankMode) {
+                            ForEach(rankModes, id: \.self) { mode in
+                                Text(mode).tag(mode)
+                            }
+                        }
+                        Text("自分のランク: \(myRank)")
+                            .font(.caption)
+                            .foregroundColor(Color(hex: "0F1A2E").opacity(0.6))
+                    }
+                    
+                    // 基本情報
                     Section(header: Text("基本情報")) {
                         Picker("居住地", selection: $prefecture) {
                             ForEach(prefectures, id: \.self) { pref in
@@ -1248,20 +1413,31 @@ struct FilterDetailSheet: View {
                             }
                         }
                         
-                        Picker("年代", selection: $ageGroup) {
-                            ForEach(ageGroups, id: \.self) { age in
-                                Text(age).tag(age)
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("年齢（20〜80歳）")
+                                .font(.subheadline)
+                                .foregroundColor(Color(hex: "0F1A2E"))
+                            HStack {
+                                Text("\(ageMin)歳")
+                                    .font(.subheadline.bold())
+                                    .frame(width: 36, alignment: .leading)
+                                Text("〜")
+                                    .foregroundColor(.secondary)
+                                Text("\(ageMax)歳")
+                                    .font(.subheadline.bold())
+                                    .frame(width: 36, alignment: .trailing)
                             }
+                            AgeRangeSlider(ageMin: $ageMin, ageMax: $ageMax, range: 20...80)
                         }
                         
-                        Picker("スケジュール", selection: $activeTime) {
+                        Picker("普段走る時間帯", selection: $activeTime) {
                             ForEach(schedules, id: \.self) { schedule in
                                 Text(schedule).tag(schedule)
                             }
                         }
                     }
                     
-                    // B. ランニング情報（Runners用）
+                    // ランニング情報
                     Section(header: Text("ランニング情報")) {
                         Picker("目的", selection: $runningGoal) {
                             ForEach(runningGoals, id: \.self) { goal in
@@ -1269,10 +1445,26 @@ struct FilterDetailSheet: View {
                             }
                         }
                         
-                        Picker("ベスト", selection: $personalBest) {
-                            ForEach(bestTimes, id: \.self) { best in
+                        Picker("ベスト（フル）", selection: $bestFull) {
+                            ForEach(bestFullOptions, id: \.self) { best in
                                 Text(best).tag(best)
                             }
+                        }
+                        if !myBestFull.isEmpty {
+                            Text("登録時の値: \(myBestFull)")
+                                .font(.caption)
+                                .foregroundColor(Color(hex: "0F1A2E").opacity(0.6))
+                        }
+                        
+                        Picker("ベスト（ハーフ）", selection: $bestHalf) {
+                            ForEach(bestHalfOptions, id: \.self) { best in
+                                Text(best).tag(best)
+                            }
+                        }
+                        if !myBestHalf.isEmpty {
+                            Text("登録時の値: \(myBestHalf)")
+                                .font(.caption)
+                                .foregroundColor(Color(hex: "0F1A2E").opacity(0.6))
                         }
                         
                         Picker("普段のジョグペース", selection: $easyPace) {
@@ -1280,9 +1472,12 @@ struct FilterDetailSheet: View {
                                 Text(pace).tag(pace)
                             }
                         }
+                        Text("登録時の値: \(myJogPace)")
+                            .font(.caption)
+                            .foregroundColor(Color(hex: "0F1A2E").opacity(0.6))
                     }
                     
-                    // C. スポット検索（Runners用）
+                    // よく走る場所
                     Section(header: Text("よく走る場所")) {
                         TextField("場所を入力", text: $localRunSpot)
                             .onChange(of: localRunSpot) { newValue in

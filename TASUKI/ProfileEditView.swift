@@ -92,13 +92,15 @@ struct ProfileEditView: View {
                         }
                     }
                     .pickerStyle(.segmented)
-                    Picker("Rank", selection: $rank) {
-                        Text("Rank S (Elite)").tag("Rank S")
-                        Text("Rank A (Athlete)").tag("Rank A")
-                        Text("Rank B (Advanced)").tag("Rank B")
-                        Text("Rank C (General)").tag("Rank C")
-                        Text("Rank D (Starter)").tag("Rank D")
+                    HStack {
+                        Text("Rank")
+                        Spacer()
+                        Text(rank)
+                            .foregroundColor(Color(hex: "0F1A2E").opacity(0.6))
                     }
+                    Text("※ランクは登録時のタイムに基づいて決まります。変更するにはプロフィール登録し直してください。")
+                        .font(.caption)
+                        .foregroundColor(Color(hex: "0F1A2E").opacity(0.5))
                 }
                 
                 // Section 2: Running Style
@@ -224,7 +226,7 @@ private extension ProfileEditView {
         storedName = name
         storedAge = age
         storedArea = area
-        storedRank = rank
+        // ランクは登録時のタイムで決まるため編集では変更しない
         storedGender = gender
         
         storedPurpose = purpose

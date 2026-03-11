@@ -17,6 +17,10 @@
     <key>CFBundleVersion</key>
     <string>1</string>
 
+    <!-- Privacy: Location for run tracking during race -->
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>対戦中の走行距離を計測するために位置情報を使用します。</string>
+
     <!-- Privacy: HealthKit usage descriptions -->
     <key>NSHealthShareUsageDescription</key>
     <string>今月の走行距離を表示するためにHealthデータの共有が必要です。</string>

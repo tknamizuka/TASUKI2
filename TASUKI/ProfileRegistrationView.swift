@@ -20,6 +20,8 @@ struct ProfileRegistrationView: View {
     @State private var birthDate: Date = Calendar.current.date(from: DateComponents(year: 1998, month: 1, day: 1)) ?? Date()
     @State private var selectedPrefecture: String = allPrefectures.first ?? "東京都"
     @State private var activityArea: String = ""
+    @State private var selectedRunCategory: String? = nil  // ビギナー, 5k, 10k, ハーフ, フル
+    @State private var runMinutes: String = ""            // カテゴリがビギナー以外のときの所要時間（分）
     @State private var selectedPurposes: [String] = []
     
     // ステップ管理
@@ -35,11 +37,12 @@ struct ProfileRegistrationView: View {
     @State private var showSkipAlert: Bool = false
     
     private let genders = ["男性", "女性", "無回答"]
+    private let runCategories = ["ビギナー", "5k", "10k", "ハーフ", "フル"]
     private let purposes = ["サブ3", "サブ3.5", "サブ4", "サブ5", "健康維持", "ダイエット", "完走", "自己ベスト更新", "その他"]
     // よく走るエリアの候補（予測用）
     private let areaSuggestions = ["皇居", "代々木公園", "駒沢公園", "多摩川", "大阪城公園", "中之島公園", "大濠公園", "名古屋城", "みなとみらい"]
     
-    private var totalSteps: Int { 8 }
+    private var totalSteps: Int { 10 }
     private var progress: CGFloat {
         CGFloat(currentStep + 1) / CGFloat(totalSteps)
     }
@@ -107,12 +110,14 @@ struct ProfileRegistrationView: View {
                         ToolbarItem(placement: .navigationBarLeading) {
                             Button(action: {
                                 if currentStep == 0 {
-                                    // 最初のステップだけ「登録せずに利用しますか？」ポップアップ
                                     showSkipAlert = true
                                 } else {
-                                    // それ以外は一つ前のステップに戻る
                                     withAnimation {
-                                        currentStep = max(currentStep - 1, 0)
+                                        if currentStep == 9, skipsTimeStep {
+                                            currentStep = 7  // ビギナー選択時はカテゴリへ
+                                        } else {
+                                            currentStep = max(currentStep - 1, 0)
+                                        }
                                     }
                                 }
                             }) {
@@ -141,6 +146,11 @@ struct ProfileRegistrationView: View {
         currentStep == totalSteps - 1
     }
     
+    /// カテゴリでビギナーを選んだ場合はタイム入力ステップをスキップ
+    private var skipsTimeStep: Bool {
+        selectedRunCategory == "ビギナー"
+    }
+    
     private var isCurrentStepValid: Bool {
         switch currentStep {
         case 0:
@@ -165,6 +175,12 @@ struct ProfileRegistrationView: View {
         case 6:
             return !activityArea.trimmingCharacters(in: .whitespaces).isEmpty
         case 7:
+            return selectedRunCategory != nil
+        case 8:
+            // ビギナー以外のときのみこのステップに来る。分で入力（数値・1以上）
+            guard let minVal = Int(runMinutes.trimmingCharacters(in: .whitespaces)), minVal > 0 else { return false }
+            return true
+        case 9:
             return !selectedPurposes.isEmpty
         default:
             return false
@@ -253,6 +269,30 @@ struct ProfileRegistrationView: View {
                     }
                 }
             case 7:
+                questionTitle("走るカテゴリを教えてください")
+                VStack(alignment: .leading, spacing: 16) {
+                    let columns = [
+                        GridItem(.adaptive(minimum: 90), spacing: 12)
+                    ]
+                    LazyVGrid(columns: columns, alignment: .leading, spacing: 12) {
+                        ForEach(runCategories, id: \.self) { category in
+                            selectableChip(title: category, isSelected: selectedRunCategory == category) {
+                                selectedRunCategory = category
+                            }
+                        }
+                    }
+                }
+            case 8:
+                questionTitle("その距離を何分で走りますか？")
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("目安のタイム（分）で入力してください")
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+                    TextField("例）25", text: $runMinutes)
+                        .textFieldStyle(.roundedBorder)
+                        .keyboardType(.numberPad)
+                }
+            case 9:
                 questionTitle("ランニングの目的を教えてください（複数選択可）")
                 // 画面内で折り返す横並びレイアウト（グリッド）
                 let columns = [
@@ -480,6 +520,50 @@ struct ProfileRegistrationView: View {
         }
     }
     
+    /// 登録タイムからランク（S,A,B,C,D）を算出
+    private func computeRank(category: String?, minutes: Int?) -> String {
+        guard let cat = category, cat != "ビギナー" else { return "Rank D" }
+        guard let min = minutes, min > 0 else { return "Rank D" }
+        switch cat {
+        case "5k":
+            if min < 16 { return "Rank S" }
+            if min < 20 { return "Rank A" }
+            if min < 24 { return "Rank B" }
+            if min < 28 { return "Rank C" }
+            return "Rank D"
+        case "10k":
+            if min < 32 { return "Rank S" }
+            if min < 40 { return "Rank A" }
+            if min < 50 { return "Rank B" }
+            if min < 60 { return "Rank C" }
+            return "Rank D"
+        case "ハーフ":
+            if min < 85 { return "Rank S" }
+            if min < 100 { return "Rank A" }
+            if min < 120 { return "Rank B" }
+            if min < 150 { return "Rank C" }
+            return "Rank D"
+        case "フル":
+            if min < 180 { return "Rank S" }
+            if min < 210 { return "Rank A" }
+            if min < 240 { return "Rank B" }
+            if min < 300 { return "Rank C" }
+            return "Rank D"
+        default:
+            return "Rank D"
+        }
+    }
+    
+    /// 分を "3:30:00" / "1:25:00" 形式のラベルに変換
+    private func formatMinutesToTimeLabel(_ totalMinutes: Int) -> String {
+        let h = totalMinutes / 60
+        let m = totalMinutes % 60
+        if h > 0 {
+            return String(format: "%d:%02d:00", h, m)
+        }
+        return String(format: "%d:00", m)
+    }
+    
     /// 生年月日の選択可能範囲（18〜80歳）
     private var allowedBirthDateRange: ClosedRange<Date> {
         let now = Date()
@@ -504,7 +588,11 @@ struct ProfileRegistrationView: View {
             saveProfile()
         } else {
             withAnimation {
-                currentStep = min(currentStep + 1, totalSteps - 1)
+                if currentStep == 7, skipsTimeStep {
+                    currentStep = 9  // ビギナー選択時はタイム入力をスキップして目的へ
+                } else {
+                    currentStep = min(currentStep + 1, totalSteps - 1)
+                }
             }
         }
     }
@@ -560,13 +648,25 @@ struct ProfileRegistrationView: View {
             let ageComponents = calendar.dateComponents([.year], from: birthDate, to: Date())
             let computedAge = ageComponents.year ?? 0
             
+            let runMinutesInt = Int(runMinutes.trimmingCharacters(in: .whitespaces))
+            let computedRank = computeRank(category: selectedRunCategory, minutes: runMinutesInt)
+            
+            // 登録タイムをフィルター用に保存（ベストフル/ハーフ）
+            UserDefaults.standard.set(computedRank, forKey: "myRank")
+            if selectedRunCategory == "フル", let min = runMinutesInt {
+                UserDefaults.standard.set(formatMinutesToTimeLabel(min), forKey: "myBestFull")
+            }
+            if selectedRunCategory == "ハーフ", let min = runMinutesInt {
+                UserDefaults.standard.set(formatMinutesToTimeLabel(min), forKey: "myBestHalf")
+            }
+            
             let user = User(
                 id: UUID(),
                 name: username,
                 profileImage: "runner",
                 profileImageUrl: imageUrl,
                 bio: "",
-                rank: "Rank C",
+                rank: computedRank,
                 age: computedAge,
                 gender: gender,
                 purpose: purpose,

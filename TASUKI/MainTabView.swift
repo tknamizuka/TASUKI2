@@ -1,35 +1,19 @@
 import SwiftUI
 
 struct MainTabView: View {
-    // タブの選択状態を管理する変数
     @State private var selectedTab: Int = 0
-    
-    // カラー設定
-    init() {
-        let appearance = UITabBarAppearance()
-        appearance.configureWithOpaqueBackground()
-        appearance.backgroundColor = UIColor.white
-        
-        let itemAppearance = UITabBarItemAppearance()
-        itemAppearance.normal.iconColor = UIColor.gray
-        itemAppearance.selected.iconColor = UIColor(red: 15/255, green: 26/255, blue: 46/255, alpha: 1.0) // Deep Navy
-        itemAppearance.normal.titleTextAttributes = [.foregroundColor: UIColor.gray]
-        itemAppearance.selected.titleTextAttributes = [.foregroundColor: UIColor(red: 15/255, green: 26/255, blue: 46/255, alpha: 1.0)] // Deep Navy
-        
-        appearance.stackedLayoutAppearance = itemAppearance
-        UITabBar.appearance().standardAppearance = appearance
-        UITabBar.appearance().scrollEdgeAppearance = appearance
-    }
     
     var body: some View {
         TabView(selection: $selectedTab) {
-            // タブ1: Home
-            HomeView()
-                .tabItem {
-                    Image(systemName: "house.fill")
-                    Text("Home")
-                }
-                .tag(0)
+            // タブ1: Home（メッセージへのリンク・未読バッジ用に NavigationStack でラップ）
+            NavigationStack {
+                HomeView()
+            }
+            .tabItem {
+                Image(systemName: "house.fill")
+                Text("Home")
+            }
+            .tag(0)
             
             // タブ2: Find
             FindView()
@@ -69,4 +53,6 @@ struct MainTabView: View {
 
 #Preview {
     MainTabView()
+        .environmentObject(AuthManager())
+        .environmentObject(UserManager())
 }

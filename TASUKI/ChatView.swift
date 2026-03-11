@@ -7,22 +7,29 @@
 
 import SwiftUI
 
-// MARK: - Chat Message Model
+// MARK: - Chat Message Model（conversationId に紐づくメッセージ。replyToMessageId で返信先を参照）
 struct ChatMessage: Identifiable {
-    let id = UUID()
+    /// メッセージの一意ID（バックエンドでは Firestore ドキュメントID）
+    let id: String
     let text: String
     let isFromMe: Bool
     let timestamp: Date
+    /// 返信先メッセージのID（同一会話内）。nil の場合は通常メッセージ
+    let replyToMessageId: String?
     
-    init(text: String, isFromMe: Bool, timestamp: Date = Date()) {
+    init(id: String? = nil, text: String, isFromMe: Bool, timestamp: Date = Date(), replyToMessageId: String? = nil) {
+        self.id = id ?? UUID().uuidString
         self.text = text
         self.isFromMe = isFromMe
         self.timestamp = timestamp
+        self.replyToMessageId = replyToMessageId
     }
 }
 
 // MARK: - Chat View
 struct ChatView: View {
+    /// バックエンドで発行された一意の会話ID（このチャットルームの識別子）
+    let conversationId: String
     let partnerName: String
     @Environment(\.dismiss) var dismiss
     
@@ -30,7 +37,8 @@ struct ChatView: View {
     @State private var messageText: String = ""
     @FocusState private var isTextFieldFocused: Bool
     
-    init(partnerName: String = "Tanaka-san") {
+    init(conversationId: String = "dummy-preview", partnerName: String = "Tanaka-san") {
+        self.conversationId = conversationId
         self.partnerName = partnerName
     }
     
@@ -78,6 +86,7 @@ struct ChatView: View {
         }
         .onAppear {
             loadDummyMessages()
+            ConversationManager.shared.markConversationAsRead(conversationId: conversationId)
         }
     }
     
@@ -104,6 +113,14 @@ struct ChatView: View {
             }
             
             VStack(alignment: message.isFromMe ? .trailing : .leading, spacing: 4) {
+                if let replyId = message.replyToMessageId,
+                   let repliedTo = messages.first(where: { $0.id == replyId }) {
+                    Text("返信: \(repliedTo.text)")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(message.isFromMe ? .white.opacity(0.9) : .secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
                 Text(message.text)
                     .font(.system(size: 16, weight: .regular))
                     .foregroundColor(message.isFromMe ? .white : .black)
@@ -154,12 +171,12 @@ struct ChatView: View {
     }
     
     // MARK: - Helper Methods
-    private func sendMessage() {
+    private func sendMessage(replyToMessageId: String? = nil) {
         guard !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return
         }
         
-        let newMessage = ChatMessage(text: messageText, isFromMe: true)
+        let newMessage = ChatMessage(text: messageText, isFromMe: true, replyToMessageId: replyToMessageId)
         messages.append(newMessage)
         messageText = ""
         isTextFieldFocused = false
@@ -168,24 +185,37 @@ struct ChatView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             let replyMessage = ChatMessage(
                 text: "ありがとうございます！",
-                isFromMe: false
+                isFromMe: false,
+                replyToMessageId: nil
             )
             messages.append(replyMessage)
         }
     }
     
     private func loadDummyMessages() {
+        let cal = Calendar.current
+        let now = Date()
+        func minAgo(_ m: Int) -> Date { cal.date(byAdding: .minute, value: -m, to: now) ?? now }
+        func hourAgo(_ h: Int) -> Date { cal.date(byAdding: .hour, value: -h, to: now) ?? now }
+        func dayAgo(_ d: Int) -> Date { cal.date(byAdding: .day, value: -d, to: now) ?? now }
+
         messages = [
-            ChatMessage(text: "こんにちは！ランニングパートナーを探しています。", isFromMe: false),
-            ChatMessage(text: "こんにちは！私も探していました。一緒に走りましょう！", isFromMe: true),
-            ChatMessage(text: "ありがとうございます！いつ頃が都合よろしいですか？", isFromMe: false),
-            ChatMessage(text: "週末の朝が良いです。6時頃からいかがでしょうか？", isFromMe: true),
+            ChatMessage(id: "dummy-1", text: "こんにちは！ランニングパートナーを探しています。", isFromMe: false, timestamp: dayAgo(2)),
+            ChatMessage(id: "dummy-2", text: "こんにちは！私も探していました。一緒に走りましょう！", isFromMe: true, timestamp: dayAgo(2)),
+            ChatMessage(id: "dummy-3", text: "ありがとうございます！いつ頃が都合よろしいですか？", isFromMe: false, timestamp: dayAgo(1)),
+            ChatMessage(id: "dummy-4", text: "週末の朝が良いです。6時頃からいかがでしょうか？", isFromMe: true, timestamp: dayAgo(1), replyToMessageId: "dummy-3"),
+            ChatMessage(id: "dummy-5", text: "6時、大丈夫です！どこで待ち合わせましょうか？", isFromMe: false, timestamp: hourAgo(5)),
+            ChatMessage(id: "dummy-6", text: "代々木公園の入口、ベンチの前でどうですか？", isFromMe: true, timestamp: hourAgo(4)),
+            ChatMessage(id: "dummy-7", text: "いいですね！では土曜の朝6時代々木公園で。", isFromMe: false, timestamp: hourAgo(3)),
+            ChatMessage(id: "dummy-8", text: "了解です。当日は軽くストレッチしてから走りましょう。", isFromMe: true, timestamp: hourAgo(2)),
+            ChatMessage(id: "dummy-9", text: "5kmくらいのペースで行きましょうか？", isFromMe: false, timestamp: minAgo(45)),
+            ChatMessage(id: "dummy-10", text: "6分/kmくらいでゆっくりいきましょう！", isFromMe: true, timestamp: minAgo(30)),
         ]
     }
 }
 
 #Preview {
     NavigationStack {
-        ChatView(partnerName: "Tanaka-san")
+        ChatView(conversationId: "preview-1", partnerName: "Tanaka-san")
     }
 }
