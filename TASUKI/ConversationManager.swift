@@ -6,19 +6,23 @@
 //
 
 import Foundation
+import Combine
 import FirebaseAuth
 import FirebaseFirestore
 
-final class ConversationManager: ObservableObject {
+/// 未読数表示用の共通ベース（@EnvironmentObject は具象型が必要なためクラスで定義）
+class UnreadCountProviderBase: ObservableObject {
+    @Published var unreadCount: Int = 0
+    func refreshUnreadCount(completion: (() -> Void)? = nil) { completion?() }
+}
+
+final class ConversationManager: UnreadCountProviderBase {
     static let shared = ConversationManager()
     private let db = Firestore.firestore()
     
-    private init() {}
+    private override init() { super.init() }
     
     var currentUserId: String? { Auth.auth().currentUser?.uid }
-    
-    /// 未読会話数（HomeView のバッジ用）
-    @Published private(set) var unreadCount: Int = 0
     
     /// 新規会話を開始し、バックエンドで一意の会話IDを発行して返す
     func createConversation(partnerUserId: String, partnerName: String, completion: @escaping (Result<String, Error>) -> Void) {
@@ -136,7 +140,7 @@ final class ConversationManager: ObservableObject {
     }
     
     /// 未読会話数を再取得して unreadCount を更新（HomeView のバッジ用）
-    func refreshUnreadCount(completion: (() -> Void)? = nil) {
+    override func refreshUnreadCount(completion: (() -> Void)? = nil) {
         guard currentUserId != nil else {
             DispatchQueue.main.async { self.unreadCount = 0; completion?() }
             return
@@ -215,4 +219,10 @@ final class ConversationManager: ObservableObject {
                 completion(.success(list))
             }
     }
+}
+
+// MARK: - プレビュー用モック（Firebase に触れず HomeView プレビューを表示）
+final class PreviewUnreadProvider: UnreadCountProviderBase {
+    override init() { super.init() }
+    init(unreadCount: Int = 0) { super.init(); self.unreadCount = unreadCount }
 }

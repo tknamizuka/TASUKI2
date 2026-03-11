@@ -18,7 +18,7 @@ struct HomeView: View {
     private let usePreviewData: Bool
     
     @State private var showRunHistory = false
-    @ObservedObject private var conversationManager = ConversationManager.shared
+    @EnvironmentObject private var unreadProvider: UnreadCountProviderBase
     
     init(
         currentDistance: Double = 0.0,
@@ -160,8 +160,8 @@ struct HomeView: View {
                         Image(systemName: "message.fill")
                             .font(.system(size: 20))
                             .foregroundColor(Color(hex: "0F1A2E"))
-                        if conversationManager.unreadCount > 0 {
-                            Text("\(min(conversationManager.unreadCount, 99))")
+                        if unreadProvider.unreadCount > 0 {
+                            Text("\(min(unreadProvider.unreadCount, 99))")
                                 .font(.system(size: 10, weight: .bold))
                                 .foregroundColor(.white)
                                 .padding(4)
@@ -176,7 +176,7 @@ struct HomeView: View {
             if !usePreviewData {
                 loadDistanceFromHealthKit()
             }
-            conversationManager.refreshUnreadCount()
+            unreadProvider.refreshUnreadCount()
         }
     }
     
@@ -204,6 +204,7 @@ struct HomeView: View {
 
 #Preview("通常（読み込み中）") {
     HomeView()
+        .environmentObject(PreviewUnreadProvider())
 }
 
 #Preview("サンプル値") {
@@ -213,4 +214,15 @@ struct HomeView: View {
         isHealthKitLoading: false,
         usePreviewData: true
     )
+    .environmentObject(PreviewUnreadProvider())
+}
+
+#Preview("未読バッジあり") {
+    HomeView(
+        currentDistance: 45.2,
+        goalDistance: 100.0,
+        isHealthKitLoading: false,
+        usePreviewData: true
+    )
+    .environmentObject(PreviewUnreadProvider(unreadCount: 3))
 }

@@ -2,12 +2,14 @@ import SwiftUI
 
 struct MainTabView: View {
     @State private var selectedTab: Int = 0
+    @EnvironmentObject private var unreadProvider: UnreadCountProviderBase
     
     var body: some View {
         TabView(selection: $selectedTab) {
             // タブ1: Home（メッセージへのリンク・未読バッジ用に NavigationStack でラップ）
             NavigationStack {
                 HomeView()
+                    .environmentObject(unreadProvider)
             }
             .tabItem {
                 Image(systemName: "house.fill")
@@ -55,4 +57,5 @@ struct MainTabView: View {
     MainTabView()
         .environmentObject(AuthManager())
         .environmentObject(UserManager())
+        .environmentObject(PreviewUnreadProvider())
 }

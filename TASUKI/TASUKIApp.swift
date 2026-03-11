@@ -87,6 +87,7 @@ struct TASUKIApp: App {
                     MainTabView()
                         .environmentObject(authManager)
                         .environmentObject(userManager)
+                        .environmentObject(ConversationManager.shared)
                 }
             }
             .task {
