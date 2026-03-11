@@ -10,12 +10,19 @@ final class AuthManager: ObservableObject {
     
     private var authStateListener: AuthStateDidChangeListenerHandle?
     
-    init() {
-        // 現在のログイン状態を初期化
-        // Firebase の初期化はアプリ起動側（AppDelegate / TASUKIApp）で一度だけ行ってください。
+    /// 本番用
+    convenience init() {
+        self.init(forPreview: false)
+    }
+    
+    /// プレビュー用: forPreview == true のときは Firebase に触れずクラッシュを防ぐ
+    init(forPreview: Bool) {
+        if forPreview {
+            isUserLoggedIn = false
+            authStateListener = nil
+            return
+        }
         isUserLoggedIn = Auth.auth().currentUser != nil
-        
-        // 状態監視
         authStateListener = Auth.auth().addStateDidChangeListener { [weak self] _, user in
             DispatchQueue.main.async {
                 self?.isUserLoggedIn = (user != nil)

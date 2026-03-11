@@ -1600,5 +1600,7 @@ struct FilterDetailSheet: View {
 }
 
 #Preview {
-    FindView()
+    NavigationStack {
+        FindView()
+    }
 }

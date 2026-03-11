@@ -173,8 +173,11 @@ struct HomeView: View {
             }
         }
         .onAppear {
-            if !usePreviewData {
+            let isPreview = ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
+            if !usePreviewData, !isPreview {
                 loadDistanceFromHealthKit()
+            } else if isPreview {
+                isHealthKitLoading = false
             }
             unreadProvider.refreshUnreadCount()
         }
@@ -203,26 +206,32 @@ struct HomeView: View {
 }
 
 #Preview("通常（読み込み中）") {
-    HomeView()
-        .environmentObject(PreviewUnreadProvider())
+    NavigationStack {
+        HomeView()
+    }
+    .environmentObject(PreviewUnreadProvider() as UnreadCountProviderBase)
 }
 
 #Preview("サンプル値") {
-    HomeView(
-        currentDistance: 45.2,
-        goalDistance: 100.0,
-        isHealthKitLoading: false,
-        usePreviewData: true
-    )
-    .environmentObject(PreviewUnreadProvider())
+    NavigationStack {
+        HomeView(
+            currentDistance: 45.2,
+            goalDistance: 100.0,
+            isHealthKitLoading: false,
+            usePreviewData: true
+        )
+    }
+    .environmentObject(PreviewUnreadProvider() as UnreadCountProviderBase)
 }
 
 #Preview("未読バッジあり") {
-    HomeView(
-        currentDistance: 45.2,
-        goalDistance: 100.0,
-        isHealthKitLoading: false,
-        usePreviewData: true
-    )
-    .environmentObject(PreviewUnreadProvider(unreadCount: 3))
+    NavigationStack {
+        HomeView(
+            currentDistance: 45.2,
+            goalDistance: 100.0,
+            isHealthKitLoading: false,
+            usePreviewData: true
+        )
+    }
+    .environmentObject(PreviewUnreadProvider(unreadCount: 3) as UnreadCountProviderBase)
 }

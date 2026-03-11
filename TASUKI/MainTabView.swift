@@ -55,7 +55,7 @@ struct MainTabView: View {
 
 #Preview {
     MainTabView()
-        .environmentObject(AuthManager())
+        .environmentObject(AuthManager(forPreview: true))
         .environmentObject(UserManager())
-        .environmentObject(PreviewUnreadProvider())
+        .environmentObject(PreviewUnreadProvider() as UnreadCountProviderBase)
 }
