@@ -43,6 +43,7 @@ struct TASUKIApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
     @StateObject private var authManager = AuthManager()
     @StateObject private var userManager = UserManager()
+    @StateObject private var joinedPracticesStore = JoinedPracticesStore()
     @State private var appState: AppState = .loading
     @State private var hasCompletedInitialCheck = false // 初回起動チェック完了フラグ
     @AppStorage("skipProfileRegistration") private var skipProfileRegistration: Bool = false
@@ -88,6 +89,7 @@ struct TASUKIApp: App {
                         .environmentObject(authManager)
                         .environmentObject(userManager)
                         .environmentObject(ConversationManager.shared)
+                        .environmentObject(joinedPracticesStore)
                 }
             }
             .task {

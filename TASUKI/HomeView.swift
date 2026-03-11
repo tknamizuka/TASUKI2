@@ -18,7 +18,9 @@ struct HomeView: View {
     private let usePreviewData: Bool
     
     @State private var showRunHistory = false
+    @State private var showPracticeCalendar = false
     @EnvironmentObject private var unreadProvider: UnreadCountProviderBase
+    @EnvironmentObject private var joinedPracticesStore: JoinedPracticesStore
     
     init(
         currentDistance: Double = 0.0,
@@ -126,6 +128,9 @@ struct HomeView: View {
             .sheet(isPresented: $showRunHistory) {
                 RunHistoryListView()
             }
+            .sheet(isPresented: $showPracticeCalendar) {
+                PracticeScheduleCalendarView(store: joinedPracticesStore)
+            }
             
             Spacer()
             
@@ -154,6 +159,25 @@ struct HomeView: View {
         .background(Color.white)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    showPracticeCalendar = true
+                } label: {
+                    ZStack(alignment: .topTrailing) {
+                        Image(systemName: "calendar")
+                            .font(.system(size: 20))
+                            .foregroundColor(Color(hex: "0F1A2E"))
+                        if joinedPracticesStore.scheduledCount > 0 {
+                            Text("\(min(joinedPracticesStore.scheduledCount, 99))")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(.white)
+                                .padding(4)
+                                .background(Circle().fill(Color(hex: "2E5CFF")))
+                                .offset(x: 8, y: -8)
+                        }
+                    }
+                }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink(destination: MessageListView()) {
                     ZStack(alignment: .topTrailing) {
@@ -210,6 +234,7 @@ struct HomeView: View {
         HomeView()
     }
     .environmentObject(PreviewUnreadProvider() as UnreadCountProviderBase)
+    .environmentObject(JoinedPracticesStore())
 }
 
 #Preview("サンプル値") {
@@ -222,10 +247,13 @@ struct HomeView: View {
         )
     }
     .environmentObject(PreviewUnreadProvider() as UnreadCountProviderBase)
+    .environmentObject(JoinedPracticesStore())
 }
 
-#Preview("未読バッジあり") {
-    NavigationStack {
+#Preview("未読・参加予定バッジあり") {
+    let store = JoinedPracticesStore()
+    store.add(JoinedPracticeItem(id: "1", practiceId: "p1", title: "皇居ラン", location: "皇居", date: Date()))
+    return NavigationStack {
         HomeView(
             currentDistance: 45.2,
             goalDistance: 100.0,
@@ -234,4 +262,5 @@ struct HomeView: View {
         )
     }
     .environmentObject(PreviewUnreadProvider(unreadCount: 3) as UnreadCountProviderBase)
+    .environmentObject(store)
 }

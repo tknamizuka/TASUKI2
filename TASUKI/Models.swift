@@ -163,6 +163,8 @@ struct Practice: Identifiable {
     /// 練習会の一意ID（募集作成時に発行。日時・場所データもこのIDに紐づく）
     let practiceId: String
     var id: String { practiceId }
+    /// この練習会に紐づくチャットの会話ID（作成時に発行。参加者が MessageListView で参加可能）
+    let chatId: String?
     let title: String
     let location: String      // 場所 (例: "皇居")
     let date: Date            // 開催日時
@@ -273,6 +275,8 @@ struct PracticeRecruitment: Identifiable {
     /// 募集の一意ID（新規作成時に発行。練習の日時・場所データもこのIDに紐づく）
     let practiceId: String
     var id: String { practiceId }
+    /// この練習会に紐づくチャットの会話ID（新規作成時に発行）
+    let chatId: String?
     let host: PartnerUser
     let title: String
     let location: String
@@ -303,6 +307,7 @@ struct PracticeRecruitment: Identifiable {
     func toPractice() -> Practice {
         Practice(
             practiceId: self.practiceId,
+            chatId: self.chatId,
             title: self.title,
             location: self.location,
             date: self.date,
@@ -410,6 +415,7 @@ let mockUsers: [User] = [
 let mockPractices = [
     Practice(
         practiceId: "mock-practice-0",
+        chatId: nil,
         title: "皇居ラン",
         location: "皇居",
         date: Date(),
@@ -448,6 +454,7 @@ let mockPartnerUsers: [PartnerUser] = []
 let mockRecruitments: [PracticeRecruitment] = [
     PracticeRecruitment(
         practiceId: "mock-practice-1",
+        chatId: nil,
         host: PartnerUser(
             name: "Kenji_Run",
             rank: "S",
@@ -485,6 +492,7 @@ let mockRecruitments: [PracticeRecruitment] = [
     ),
     PracticeRecruitment(
         practiceId: "mock-practice-2",
+        chatId: nil,
         host: PartnerUser(
             name: "Yuki",
             rank: "A",
@@ -522,6 +530,7 @@ let mockRecruitments: [PracticeRecruitment] = [
     ),
     PracticeRecruitment(
         practiceId: "mock-practice-3",
+        chatId: nil,
         host: PartnerUser(
             name: "Momo",
             rank: "B",

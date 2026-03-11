@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import FirebaseAuth
 
 // MARK: - Sort Option
 enum SortOption: String, CaseIterable {
@@ -802,7 +803,7 @@ struct FindView: View {
             .sheet(isPresented: $showRecruitmentSheet) {
                 RecruitmentPostSheet(
                     onPost: { title, date, pace, location, description in
-                        // 新しい募集を追加（モック）
+                        let practiceId = UUID().uuidString
                         let myUser = PartnerUser(
                             name: "Hiro",
                             rank: "A",
@@ -823,28 +824,52 @@ struct FindView: View {
                             ageGroup: "20s",
                             runningGoal: "Sub3",
                             personalBest: "3:10:00",
-            activeTime: "Night",
-            easyPace: "5:00/km",
-            connectionStyle: .both
-        )
-                        
-                        let newRecruitment = PracticeRecruitment(
-                            practiceId: UUID().uuidString,
-                            host: myUser,
-                            title: title,
-                            location: location,
-                            date: date,
-                            category: .other,
-                            pace: pace,
-                            distance: "",
-                            description: description,
-                            applicants: [],
-                            participantUserIds: [],
-                            maxParticipants: 10
+                            activeTime: "Night",
+                            easyPace: "5:00/km",
+                            connectionStyle: .both
                         )
-                        
-                        recruitments.insert(newRecruitment, at: 0)
-                        showRecruitmentSheet = false
+                        guard let hostUid = Auth.auth().currentUser?.uid else {
+                            let newRecruitment = PracticeRecruitment(
+                                practiceId: practiceId,
+                                chatId: nil,
+                                host: myUser,
+                                title: title,
+                                location: location,
+                                date: date,
+                                category: .other,
+                                pace: pace,
+                                distance: "",
+                                description: description,
+                                applicants: [],
+                                participantUserIds: [],
+                                maxParticipants: 10
+                            )
+                            recruitments.insert(newRecruitment, at: 0)
+                            showRecruitmentSheet = false
+                            return
+                        }
+                        ConversationManager.shared.createPracticeConversation(practiceId: practiceId, hostUserId: hostUid, practiceTitle: title) { result in
+                            DispatchQueue.main.async {
+                                let chatId: String? = (try? result.get())
+                                let newRecruitment = PracticeRecruitment(
+                                    practiceId: practiceId,
+                                    chatId: chatId,
+                                    host: myUser,
+                                    title: title,
+                                    location: location,
+                                    date: date,
+                                    category: .other,
+                                    pace: pace,
+                                    distance: "",
+                                    description: description,
+                                    applicants: [],
+                                    participantUserIds: [hostUid],
+                                    maxParticipants: 10
+                                )
+                                recruitments.insert(newRecruitment, at: 0)
+                                showRecruitmentSheet = false
+                            }
+                        }
                     },
                     onCancel: {
                         showRecruitmentSheet = false

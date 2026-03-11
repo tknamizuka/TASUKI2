@@ -70,6 +70,52 @@ final class ConversationManager: UnreadCountProviderBase {
             }
     }
     
+    /// 練習会に紐づくチャットを新規作成（practiceID 作成時に呼ぶ）。会話ID（chatID）を返す
+    func createPracticeConversation(practiceId: String, hostUserId: String, practiceTitle: String, completion: @escaping (Result<String, Error>) -> Void) {
+        let ref = db.collection("conversations").document()
+        let now = Timestamp(date: Date())
+        let partnerName = "練習会: \(practiceTitle)"
+        var data: [String: Any] = [
+            "participantIds": [hostUserId],
+            "partnerName": partnerName,
+            "practiceId": practiceId,
+            "createdAt": now,
+            "lastMessageAt": now,
+            "lastReadAt": [hostUserId: now]
+        ]
+        ref.setData(data) { error in
+            if let error = error {
+                completion(.failure(error))
+            } else {
+                completion(.success(ref.documentID))
+            }
+        }
+    }
+    
+    /// 練習会チャットに参加者を追加（参加者が MessageListView でそのチャットに参加できるようにする）
+    func addParticipantToPracticeChat(conversationId: String, userId: String, completion: ((Error?) -> Void)? = nil) {
+        let ref = db.collection("conversations").document(conversationId)
+        ref.getDocument { [weak self] snapshot, error in
+            if let error = error {
+                completion?(error)
+                return
+            }
+            guard let data = snapshot?.data(),
+                  var ids = data["participantIds"] as? [String] else {
+                completion?(NSError(domain: "ConversationManager", code: -2, userInfo: [NSLocalizedDescriptionKey: "会話が見つかりません"]))
+                return
+            }
+            if ids.contains(userId) {
+                completion?(nil)
+                return
+            }
+            ids.append(userId)
+            ref.updateData(["participantIds": ids]) { err in
+                completion?(err)
+            }
+        }
+    }
+    
     /// 会話開始: 既存があればそのID、無ければ新規作成してIDを返す
     func startOrGetConversation(partnerUserId: String, partnerName: String, completion: @escaping (Result<String, Error>) -> Void) {
         findExistingConversation(partnerUserId: partnerUserId) { [weak self] result in

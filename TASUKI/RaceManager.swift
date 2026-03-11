@@ -12,7 +12,8 @@ import FirebaseFirestore
 
 final class RaceManager: ObservableObject {
     static let shared = RaceManager()
-    private let db = Firestore.firestore()
+    /// プレビューでインスタンス生成時に Firestore に触れないよう lazy にしている
+    private lazy var db = Firestore.firestore()
     
     @Published var currentRace: Race?
     @Published var participants: [RaceParticipant] = []

@@ -456,3 +456,8 @@ struct RaceResultsView: View {
         return String(format: "%d:%02d.%02d", m, s, ms)
     }
 }
+
+// MARK: - Previews
+#Preview("対戦エントリ") {
+    RaceEntryView()
+}

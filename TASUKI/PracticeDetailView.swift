@@ -6,6 +6,7 @@ struct PracticeDetailView: View {
     // 前の画面から渡されるデータ（画面内でステータスを変えるためStateにする）
     @State var practice: Practice
     @Environment(\.dismiss) var dismiss
+    @EnvironmentObject private var joinedPracticesStore: JoinedPracticesStore
     @State private var showJoinConfirm = false
     
     /// 現在ログイン中のユーザーID（practiceID に紐づく参加者リストの更新に使用）
@@ -234,6 +235,7 @@ struct PracticeDetailView: View {
                             practice.participantUserIds.removeAll { $0 == uid }
                             practice.isJoined = false
                         }
+                        joinedPracticesStore.remove(practiceId: practice.practiceId)
                     }
                 } else {
                     // 未参加 → 確認アラートを表示
@@ -284,6 +286,16 @@ struct PracticeDetailView: View {
                         practice.participantUserIds.append(uid)
                         practice.isJoined = true
                     }
+                    if let cid = practice.chatId {
+                        ConversationManager.shared.addParticipantToPracticeChat(conversationId: cid, userId: uid)
+                    }
+                    joinedPracticesStore.add(JoinedPracticeItem(
+                        id: practice.practiceId,
+                        practiceId: practice.practiceId,
+                        title: practice.title,
+                        location: practice.location,
+                        date: practice.date
+                    ))
                 }
             }
         } message: {
@@ -303,8 +315,10 @@ struct PracticeChatMessage: Identifiable {
 // プレビュー用データ
 #Preview {
     NavigationView {
-        PracticeDetailView(practice: Practice(
+        PracticeDetailView(
+            practice: Practice(
             practiceId: "preview-practice-1",
+            chatId: nil,
             title: "皇居ラン 2周 ゆっくりペース",
             location: "皇居周辺",
             date: Date(),
@@ -317,5 +331,6 @@ struct PracticeChatMessage: Identifiable {
             participantUserIds: [],
             isJoined: false
         ))
+        .environmentObject(JoinedPracticesStore())
     }
 }
