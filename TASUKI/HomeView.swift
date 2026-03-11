@@ -8,9 +8,11 @@
 import SwiftUI
 
 struct HomeView: View {
-    // 目標管理用のデータ
-    @State private var currentDistance: Double = 45.2
+    // 目標管理用のデータ（currentDistance は HealthKit から取得）
+    @State private var currentDistance: Double = 0.0
     @State private var goalDistance: Double = 100.0
+    @State private var isHealthKitLoading = true
+    @State private var healthKitError: String?
     
     // 進捗率（0.0〜1.0）
     var progress: CGFloat {
@@ -58,20 +60,36 @@ struct HomeView: View {
                         .animation(.easeOut(duration: 1.0), value: progress)
                     
                     VStack(spacing: 5) {
-                        HStack(alignment: .lastTextBaseline, spacing: 5) {
-                            Text("\(progressPercent)")
-                                .font(.system(size: 80, weight: .bold))
-                                .foregroundColor(Color(hex: "0F1A2E"))
+                        if isHealthKitLoading {
+                            ProgressView()
+                                .scaleEffect(1.2)
+                                .padding(.bottom, 8)
+                            Text("読み込み中...")
+                                .font(.subheadline)
+                                .foregroundColor(.gray)
+                        } else {
+                            HStack(alignment: .lastTextBaseline, spacing: 5) {
+                                Text("\(progressPercent)")
+                                    .font(.system(size: 80, weight: .bold))
+                                    .foregroundColor(Color(hex: "0F1A2E"))
+                                
+                                Text("%")
+                                    .font(.system(size: 40, weight: .bold))
+                                    .foregroundColor(Color(hex: "0F1A2E"))
+                            }
                             
-                            Text("%")
-                                .font(.system(size: 40, weight: .bold))
-                                .foregroundColor(Color(hex: "0F1A2E"))
+                            Text("\(String(format: "%.1f", currentDistance)) / \(Int(goalDistance)) km")
+                                .font(.subheadline)
+                                .fontWeight(.bold)
+                                .foregroundColor(.gray)
                         }
-                        
-                        Text("\(String(format: "%.1f", currentDistance)) / \(Int(goalDistance)) km")
-                             .font(.subheadline)
-                             .fontWeight(.bold)
-                             .foregroundColor(.gray)
+                        if let error = healthKitError {
+                            Text(error)
+                                .font(.caption)
+                                .foregroundColor(.red)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal)
+                        }
                     }
                 }
                 
@@ -107,6 +125,30 @@ struct HomeView: View {
             .padding(.bottom, 50)
         }
         .background(Color.white)
+        .onAppear {
+            loadDistanceFromHealthKit()
+        }
+    }
+    
+    /// HealthKit から今月の走行距離を取得して currentDistance に反映
+    private func loadDistanceFromHealthKit() {
+        HealthKitManager.shared.requestAuthorization { success, error in
+            if !success {
+                isHealthKitLoading = false
+                healthKitError = "HealthKit の利用を許可してください"
+                return
+            }
+            HealthKitManager.shared.fetchRunningDistanceThisMonth { result in
+                isHealthKitLoading = false
+                switch result {
+                case .success(let km):
+                    currentDistance = km
+                    healthKitError = nil
+                case .failure(let err):
+                    healthKitError = err.localizedDescription
+                }
+            }
+        }
     }
 }
 
