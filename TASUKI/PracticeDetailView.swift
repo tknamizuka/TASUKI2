@@ -291,6 +291,7 @@ struct PracticeChatMessage: Identifiable {
 #Preview {
     NavigationView {
         PracticeDetailView(practice: Practice(
+            practiceId: "preview-practice-1",
             title: "皇居ラン 2周 ゆっくりペース",
             location: "皇居周辺",
             date: Date(),

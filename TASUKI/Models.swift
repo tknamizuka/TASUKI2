@@ -160,7 +160,9 @@ enum PracticeCategory: String, CaseIterable, Identifiable, Codable {
 
 // MARK: - Practice Model
 struct Practice: Identifiable {
-    let id = UUID()
+    /// 練習会の一意ID（募集作成時に発行。日時・場所データもこのIDに紐づく）
+    let practiceId: String
+    var id: String { practiceId }
     let title: String
     let location: String      // 場所 (例: "皇居")
     let date: Date            // 開催日時
@@ -266,7 +268,9 @@ struct QAItem: Identifiable {
 }
 
 struct PracticeRecruitment: Identifiable {
-    let id = UUID()
+    /// 募集の一意ID（新規作成時に発行。練習の日時・場所データもこのIDに紐づく）
+    let practiceId: String
+    var id: String { practiceId }
     let host: PartnerUser
     let title: String
     let location: String
@@ -294,6 +298,7 @@ struct PracticeRecruitment: Identifiable {
     // Practiceへの変換（詳細画面用）
     func toPractice() -> Practice {
         Practice(
+            practiceId: self.practiceId,
             title: self.title,
             location: self.location,
             date: self.date,
@@ -400,6 +405,7 @@ let mockUsers: [User] = [
 
 let mockPractices = [
     Practice(
+        practiceId: "mock-practice-0",
         title: "皇居ラン",
         location: "皇居",
         date: Date(),
@@ -437,6 +443,7 @@ let mockPartnerUsers: [PartnerUser] = []
 
 let mockRecruitments: [PracticeRecruitment] = [
     PracticeRecruitment(
+        practiceId: "mock-practice-1",
         host: PartnerUser(
             name: "Kenji_Run",
             rank: "S",
@@ -472,6 +479,7 @@ let mockRecruitments: [PracticeRecruitment] = [
         maxParticipants: 10
     ),
     PracticeRecruitment(
+        practiceId: "mock-practice-2",
         host: PartnerUser(
             name: "Yuki",
             rank: "A",
@@ -507,6 +515,7 @@ let mockRecruitments: [PracticeRecruitment] = [
         maxParticipants: 8
     ),
     PracticeRecruitment(
+        practiceId: "mock-practice-3",
         host: PartnerUser(
             name: "Momo",
             rank: "B",

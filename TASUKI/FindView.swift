@@ -829,6 +829,7 @@ struct FindView: View {
         )
                         
                         let newRecruitment = PracticeRecruitment(
+                            practiceId: UUID().uuidString,
                             host: myUser,
                             title: title,
                             location: location,
@@ -1223,6 +1224,7 @@ struct RecruitmentPostSheet: View {
                     }
                 }
             }
+            .environment(\.locale, Locale(identifier: "ja_JP"))
             .navigationTitle("募集を作成")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
