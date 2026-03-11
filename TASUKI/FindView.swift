@@ -839,6 +839,7 @@ struct FindView: View {
                             distance: "",
                             description: description,
                             applicants: [],
+                            participantUserIds: [],
                             maxParticipants: 10
                         )
                         

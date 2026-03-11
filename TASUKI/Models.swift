@@ -173,7 +173,9 @@ struct Practice: Identifiable {
     let organizer: User
     
     var maxParticipants: Int  // 定員
-    var currentParticipants: Int
+    /// practiceID に紐づく参加ユーザーID一覧（例: Firebase UID）
+    var participantUserIds: [String]
+    var currentParticipants: Int { participantUserIds.count }
     var isJoined: Bool = false
     
     // フィルタリング用のヘルパー
@@ -280,6 +282,8 @@ struct PracticeRecruitment: Identifiable {
     let distance: String
     let description: String
     let applicants: [PartnerUser]
+    /// practiceID に紐づく参加ユーザーID一覧（例: Firebase UID）
+    var participantUserIds: [String]
     let maxParticipants: Int
     
     var dayOfWeek: String {
@@ -308,7 +312,7 @@ struct PracticeRecruitment: Identifiable {
             description: self.description,
             organizer: self.host.toUser(),
             maxParticipants: self.maxParticipants,
-            currentParticipants: self.applicants.count,
+            participantUserIds: self.participantUserIds,
             isJoined: false
         )
     }
@@ -415,7 +419,7 @@ let mockPractices = [
         description: "調整ラン",
         organizer: mockUser,
         maxParticipants: 10,
-        currentParticipants: 2,
+        participantUserIds: ["mock-user-1", "mock-user-2"],
         isJoined: false
     )
 ]
@@ -476,6 +480,7 @@ let mockRecruitments: [PracticeRecruitment] = [
         distance: "15km",
         description: "サブ3〜3.5目標の方向けのペース走です。途中離脱OK、一緒にビルドアップしましょう。",
         applicants: [],
+        participantUserIds: [],
         maxParticipants: 10
     ),
     PracticeRecruitment(
@@ -512,6 +517,7 @@ let mockRecruitments: [PracticeRecruitment] = [
         distance: "120分",
         description: "フルマラソンに向けた脚づくり用のLSDです。会話できるペースでゆっくり走ります。",
         applicants: [],
+        participantUserIds: [],
         maxParticipants: 8
     ),
     PracticeRecruitment(
@@ -548,6 +554,7 @@ let mockRecruitments: [PracticeRecruitment] = [
         distance: "5km",
         description: "走るペースはゆっくり、会話メインのおしゃべりランです。ラン後にカフェで一息つきましょう。",
         applicants: [],
+        participantUserIds: [],
         maxParticipants: 6
     )
 ]

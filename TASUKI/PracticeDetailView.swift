@@ -1,11 +1,15 @@
 import SwiftUI
 import UIKit
+import FirebaseAuth
 
 struct PracticeDetailView: View {
     // 前の画面から渡されるデータ（画面内でステータスを変えるためStateにする）
     @State var practice: Practice
     @Environment(\.dismiss) var dismiss
     @State private var showJoinConfirm = false
+    
+    /// 現在ログイン中のユーザーID（practiceID に紐づく参加者リストの更新に使用）
+    private var currentUserId: String? { Auth.auth().currentUser?.uid }
     
     // 練習会限定チャット（ベータ版）
     @State private var chatMessages: [PracticeChatMessage] = [
@@ -224,10 +228,12 @@ struct PracticeDetailView: View {
                 impactMed.impactOccurred()
                 
                 if practice.isJoined {
-                    // 参加済み → 即キャンセル
-                    withAnimation(.spring()) {
-                        practice.isJoined = false
-                        practice.currentParticipants -= 1
+                    // 参加済み → 即キャンセル（participantUserIds から自分のIDを削除）
+                    if let uid = currentUserId {
+                        withAnimation(.spring()) {
+                            practice.participantUserIds.removeAll { $0 == uid }
+                            practice.isJoined = false
+                        }
                     }
                 } else {
                     // 未参加 → 確認アラートを表示
@@ -256,6 +262,11 @@ struct PracticeDetailView: View {
         }
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
+        .onAppear {
+            if let uid = currentUserId {
+                practice.isJoined = practice.participantUserIds.contains(uid)
+            }
+        }
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 Button(action: { dismiss() }) {
@@ -268,9 +279,11 @@ struct PracticeDetailView: View {
         .alert("参加リクエスト", isPresented: $showJoinConfirm) {
             Button("キャンセル", role: .cancel) { }
             Button("参加する", role: .none) {
-                withAnimation(.spring()) {
-                    practice.isJoined = true
-                    practice.currentParticipants += 1
+                if let uid = currentUserId, !practice.participantUserIds.contains(uid) {
+                    withAnimation(.spring()) {
+                        practice.participantUserIds.append(uid)
+                        practice.isJoined = true
+                    }
                 }
             }
         } message: {
@@ -301,7 +314,7 @@ struct PracticeChatMessage: Identifiable {
             description: "朝の皇居をゆっくり走りましょう！初心者の方も大歓迎です。終わった後は近くのカフェでコーヒーでも。",
             organizer: mockUser,
             maxParticipants: 5,
-            currentParticipants: 0, // 0人のパターンを確認
+            participantUserIds: [],
             isJoined: false
         ))
     }
