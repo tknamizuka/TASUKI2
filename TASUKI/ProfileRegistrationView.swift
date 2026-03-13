@@ -520,37 +520,82 @@ struct ProfileRegistrationView: View {
         }
     }
     
-    /// 登録タイムからランク（S,A,B,C,D）を算出
+    /// 登録タイムからランク（S,A,B,C,D,E）を算出
+    ///
+    /// ランク基準は「TASUKI ユーザーランク・タイム基準表」に合わせている。
+    /// ビギナー or 分未入力の場合は最下位ランク（E）を付与する。
     private func computeRank(category: String?, minutes: Int?) -> String {
-        guard let cat = category, cat != "ビギナー" else { return "Rank D" }
-        guard let min = minutes, min > 0 else { return "Rank D" }
+        guard let cat = category else { return "Rank E" }
+        // ビギナー or 分未入力 → Rank E
+        guard cat != "ビギナー",
+              let min = minutes,
+              min > 0 else {
+            return "Rank E"
+        }
+        
         switch cat {
         case "5k":
-            if min < 16 { return "Rank S" }
-            if min < 20 { return "Rank A" }
-            if min < 24 { return "Rank B" }
-            if min < 28 { return "Rank C" }
-            return "Rank D"
+            // 5km: S/A/B/C/D/E
+            // S: 17:00未満
+            if min < 17 { return "Rank S" }
+            // A: 17:00〜21:30未満（≒22分未満で丸め）
+            if min < 22 { return "Rank A" }
+            // B: 21:30〜25:00未満
+            if min < 25 { return "Rank B" }
+            // C: 25:00〜30:00未満
+            if min < 30 { return "Rank C" }
+            // D: 30:00〜35:00未満
+            if min < 35 { return "Rank D" }
+            // E: 35:00以上
+            return "Rank E"
+            
         case "10k":
-            if min < 32 { return "Rank S" }
-            if min < 40 { return "Rank A" }
-            if min < 50 { return "Rank B" }
+            // 10km
+            // S: 35:30未満（≒36分未満）
+            if min < 36 { return "Rank S" }
+            // A: 35:30〜45:00未満
+            if min < 45 { return "Rank A" }
+            // B: 45:00〜52:00未満
+            if min < 52 { return "Rank B" }
+            // C: 52:00〜60:00未満
             if min < 60 { return "Rank C" }
-            return "Rank D"
+            // D: 60:00〜70:00未満
+            if min < 70 { return "Rank D" }
+            // E: 70:00以上
+            return "Rank E"
+            
         case "ハーフ":
-            if min < 85 { return "Rank S" }
+            // ハーフ（21.0975km）
+            // S: 1:18:00未満（78分未満）
+            if min < 78 { return "Rank S" }
+            // A: 1:18:00〜1:40:00未満（100分未満）
             if min < 100 { return "Rank A" }
-            if min < 120 { return "Rank B" }
-            if min < 150 { return "Rank C" }
-            return "Rank D"
+            // B: 1:40:00〜1:55:00未満（115分未満）
+            if min < 115 { return "Rank B" }
+            // C: 1:55:00〜2:15:00未満（135分未満）
+            if min < 135 { return "Rank C" }
+            // D: 2:15:00〜2:30:00未満（150分未満）
+            if min < 150 { return "Rank D" }
+            // E: 2:30:00以上
+            return "Rank E"
+            
         case "フル":
-            if min < 180 { return "Rank S" }
+            // フル（42.195km）
+            // S: 2:45:00未満（165分未満）
+            if min < 165 { return "Rank S" }
+            // A: 2:45:00〜3:30:00未満（210分未満）
             if min < 210 { return "Rank A" }
+            // B: 3:30:00〜4:00:00未満（240分未満）
             if min < 240 { return "Rank B" }
-            if min < 300 { return "Rank C" }
-            return "Rank D"
+            // C: 4:00:00〜4:30:00未満（270分未満）
+            if min < 270 { return "Rank C" }
+            // D: 4:30:00〜5:00:00未満（300分未満）
+            if min < 300 { return "Rank D" }
+            // E: 5:00:00以上
+            return "Rank E"
+            
         default:
-            return "Rank D"
+            return "Rank E"
         }
     }
     
