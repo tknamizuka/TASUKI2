@@ -1,5 +1,42 @@
 import Foundation
 import HealthKit
+import CoreLocation
+
+/// 期間内のランニングワークアウト1件（目標距離通過タイムはルートがあれば算出）
+struct RunningWorkoutInfo: Identifiable {
+    let id: UUID
+    let startDate: Date
+    let durationSeconds: Double
+    let totalDistanceKm: Double
+    /// ルートから算出した「目標距離通過時点のタイム」（秒）。nil の場合はルートなし
+    let timeAtTargetSeconds: Double?
+    
+    var timeAtTargetFormatted: String? {
+        guard let sec = timeAtTargetSeconds else { return nil }
+        let m = Int(sec) / 60
+        let s = Int(sec) % 60
+        if m >= 60 {
+            let h = m / 60
+            let mm = m % 60
+            return String(format: "%d:%02d:%02d", h, mm, s)
+        }
+        return String(format: "%d:%02d", m, s)
+    }
+    
+    var durationFormatted: String {
+        let m = Int(durationSeconds) / 60
+        let s = Int(durationSeconds) % 60
+        if m >= 60 {
+            let h = m / 60
+            let mm = m % 60
+            return String(format: "%d:%02d:%02d", h, mm, s)
+        }
+        return String(format: "%d:%02d", m, s)
+    }
+    
+    /// 提出に使うタイム（秒）。ルートから算出があればそれ、なければ全体タイムは呼び出し側で距離範囲チェック後に使用
+    var submitTimeSeconds: Double? { timeAtTargetSeconds ?? (durationSeconds > 0 ? durationSeconds : nil) }
+}
 
 /// HealthKit との連携を担当するマネージャ
 final class HealthKitManager {
@@ -10,9 +47,8 @@ final class HealthKitManager {
     
     private init() {}
     
-    /// HealthKit からウォーキング＋ランニング距離を読み取るための権限をリクエストする
+    /// HealthKit からウォーキング＋ランニング距離・ワークアウト・ルートを読み取るための権限をリクエストする
     func requestAuthorization(completion: @escaping (Bool, Error?) -> Void) {
-        // 端末が HealthKit をサポートしていない場合
         guard HKHealthStore.isHealthDataAvailable() else {
             completion(false, NSError(domain: "HealthKit", code: 0, userInfo: [
                 NSLocalizedDescriptionKey: "HealthKit is not available on this device."
@@ -27,7 +63,9 @@ final class HealthKitManager {
             return
         }
         
-        let readTypes: Set<HKObjectType> = [distanceType]
+        var readTypes: Set<HKObjectType> = [distanceType]
+        readTypes.insert(HKObjectType.workoutType())
+        readTypes.insert(HKSeriesType.workoutRoute())
         
         healthStore.requestAuthorization(toShare: nil, read: readTypes) { success, error in
             DispatchQueue.main.async {
@@ -93,6 +131,133 @@ final class HealthKitManager {
         }
         
         healthStore.execute(query)
+    }
+    
+    // MARK: - ワークアウト・ルート（タイムトライアル用）
+    
+    /// 指定ワークアウトのルートから「目標距離（m）通過時点のタイム」を算出。ルートが無い or 距離未達なら failure
+    func timeAtDistance(workout: HKWorkout, targetMeters: Double, completion: @escaping (Result<TimeInterval, Error>) -> Void) {
+        let routeType = HKSeriesType.workoutRoute()
+        let predicate = HKQuery.predicateForObjects(from: workout)
+        let routeQuery = HKSampleQuery(sampleType: routeType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)]) { [weak self] _, samples, error in
+            guard let self = self else { return }
+            if let error = error {
+                DispatchQueue.main.async { completion(.failure(error)) }
+                return
+            }
+            guard let route = samples?.first as? HKWorkoutRoute else {
+                DispatchQueue.main.async {
+                    completion(.failure(NSError(domain: "HealthKit", code: 10, userInfo: [NSLocalizedDescriptionKey: "ルートデータがありません"])))
+                }
+                return
+            }
+            self.fetchLocationsAndComputeTimeAtDistance(route: route, workoutStart: workout.startDate, targetMeters: targetMeters, completion: completion)
+        }
+        healthStore.execute(routeQuery)
+    }
+    
+    private func fetchLocationsAndComputeTimeAtDistance(route: HKWorkoutRoute, workoutStart: Date, targetMeters: Double, completion: @escaping (Result<TimeInterval, Error>) -> Void) {
+        var allLocations: [CLLocation] = []
+        let routeQuery = HKWorkoutRouteQuery(route: route) { [weak self] _, locations, done, error in
+            if let error = error {
+                DispatchQueue.main.async { completion(.failure(error)) }
+                return
+            }
+            if let locs = locations { allLocations.append(contentsOf: locs) }
+            guard done else { return }
+            let result = self?.computeTimeAtDistance(locations: allLocations, workoutStart: workoutStart, targetMeters: targetMeters)
+            DispatchQueue.main.async {
+                if let sec = result {
+                    completion(.success(sec))
+                } else {
+                    completion(.failure(NSError(domain: "HealthKit", code: 11, userInfo: [NSLocalizedDescriptionKey: "目標距離に達していません"])))
+                }
+            }
+        }
+        healthStore.execute(routeQuery)
+    }
+    
+    private func computeTimeAtDistance(locations: [CLLocation], workoutStart: Date, targetMeters: Double) -> TimeInterval? {
+        let sorted = locations.sorted { ($0.timestamp).timeIntervalSince1970 < ($1.timestamp).timeIntervalSince1970 }
+        guard !sorted.isEmpty else { return nil }
+        var cumulative: Double = 0
+        var prev: CLLocation? = nil
+        for loc in sorted {
+            if let p = prev {
+                let d = p.distance(from: loc)
+                if d > 0 && d < 500 { cumulative += d }
+            }
+            prev = loc
+            if cumulative >= targetMeters {
+                let t = loc.timestamp.timeIntervalSince(workoutStart)
+                return max(0, t)
+            }
+        }
+        if cumulative > 0 && targetMeters > 0, let last = sorted.last {
+            let ratio = targetMeters / cumulative
+            let interp = last.timestamp.timeIntervalSince(workoutStart) * ratio
+            return max(0, interp)
+        }
+        return nil
+    }
+    
+    /// ワークアウトに紐づく歩行＋ランニング距離（m）を取得
+    private func getTotalDistanceMeters(workout: HKWorkout, completion: @escaping (Double) -> Void) {
+        guard let distanceType = HKQuantityType.quantityType(forIdentifier: .distanceWalkingRunning) else {
+            completion(0)
+            return
+        }
+        let predicate = HKQuery.predicateForObjects(from: workout)
+        let q = HKSampleQuery(sampleType: distanceType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, _ in
+            let total = (samples as? [HKQuantitySample])?.reduce(0.0) { $0 + $1.quantity.doubleValue(for: HKUnit.meter()) } ?? 0
+            DispatchQueue.main.async { completion(total) }
+        }
+        healthStore.execute(q)
+    }
+    
+    /// 期間内のランニングワークアウトを取得。minDistanceKm 以上で、targetDistanceKm 時点のタイムをルートから算出（可能な場合）
+    func fetchRunningWorkouts(from start: Date, to end: Date, minDistanceKm: Double, targetDistanceKm: Double, completion: @escaping (Result<[RunningWorkoutInfo], Error>) -> Void) {
+        guard HKHealthStore.isHealthDataAvailable() else {
+            completion(.failure(NSError(domain: "HealthKit", code: 0, userInfo: [NSLocalizedDescriptionKey: "HealthKit is not available."])))
+            return
+        }
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: .strictStartDate)
+        let workoutQuery = HKSampleQuery(sampleType: HKObjectType.workoutType(), predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)]) { [weak self] _, samples, error in
+            guard let self = self else { return }
+            if let error = error {
+                DispatchQueue.main.async { completion(.failure(error)) }
+                return
+            }
+            let workouts = (samples as? [HKWorkout])?.filter { $0.workoutActivityType == .running } ?? []
+            let targetMeters = targetDistanceKm * 1000
+            let minMeters = minDistanceKm * 1000
+            var infos: [RunningWorkoutInfo] = []
+            let group = DispatchGroup()
+            let lock = NSLock()
+            for w in workouts {
+                group.enter()
+                self.getTotalDistanceMeters(workout: w) { meters in
+                    guard meters >= minMeters else { group.leave(); return }
+                    let totalKm = meters / 1000.0
+                    let duration = w.duration
+                    self.timeAtDistance(workout: w, targetMeters: targetMeters) { result in
+                        lock.lock()
+                        defer { lock.unlock(); group.leave() }
+                        switch result {
+                        case .success(let sec):
+                            infos.append(RunningWorkoutInfo(id: w.uuid, startDate: w.startDate, durationSeconds: duration, totalDistanceKm: totalKm, timeAtTargetSeconds: sec))
+                        case .failure:
+                            infos.append(RunningWorkoutInfo(id: w.uuid, startDate: w.startDate, durationSeconds: duration, totalDistanceKm: totalKm, timeAtTargetSeconds: nil))
+                        }
+                    }
+                }
+            }
+            group.notify(queue: .main) {
+                infos.sort { $0.startDate > $1.startDate }
+                completion(.success(infos))
+            }
+        }
+        healthStore.execute(workoutQuery)
     }
 }
 
