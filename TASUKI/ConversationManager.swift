@@ -157,13 +157,16 @@ final class ConversationManager: UnreadCountProviderBase {
                         return ts.dateValue()
                     }()
                     let hasUnread = lastMessageAt > (lastReadAt ?? .distantPast)
+                    // practiceId を持つ会話は「練習会チャット」として扱う
+                    let isPractice = (data["practiceId"] as? String) != nil || partnerName.hasPrefix("練習会:")
                     return MessageConversation(
                         conversationId: doc.documentID,
                         partnerName: partnerName,
                         avatarImage: "person.circle.fill",
                         lastMessage: lastMessage.isEmpty ? "メッセージがありません" : lastMessage,
                         timestamp: lastMessageAt,
-                        hasUnread: hasUnread
+                        hasUnread: hasUnread,
+                        isPractice: isPractice
                     )
                 }
                 completion(.success(list))
@@ -185,6 +188,42 @@ final class ConversationManager: UnreadCountProviderBase {
         }
     }
     
+    /// 自分宛のマッチングリクエスト一覧を取得（現状はダミーデータ）
+    func fetchMyMatchRequests(completion: @escaping (Result<[MatchRequestSummary], Error>) -> Void) {
+        // TODO: Firestore の match_requests コレクションから取得する実装に差し替え
+        let cal = Calendar.current
+        let now = Date()
+        func daysAgo(_ d: Int) -> Date { cal.date(byAdding: .day, value: -d, to: now) ?? now }
+        
+        let samples: [MatchRequestSummary] = [
+            MatchRequestSummary(
+                id: "req-partner-1",
+                fromName: "Kenji_Run",
+                type: .partner,
+                message: "一緒に皇居で朝ランしませんか？",
+                createdAt: daysAgo(0),
+                isNew: true
+            ),
+            MatchRequestSummary(
+                id: "req-practice-1",
+                fromName: "皇居ラン募集",
+                type: .practice,
+                message: "皇居ラン 2周 ゆっくりペース（6:00/km）への参加リクエストです。",
+                createdAt: daysAgo(1),
+                isNew: true
+            ),
+            MatchRequestSummary(
+                id: "req-partner-2",
+                fromName: "Momo",
+                type: .partner,
+                message: "週末のジョグ仲間を探しています。",
+                createdAt: daysAgo(3),
+                isNew: false
+            )
+        ]
+        completion(.success(samples))
+    }
+    
     /// 未読会話数を再取得して unreadCount を更新（HomeView のバッジ用）
     override func refreshUnreadCount(completion: (() -> Void)? = nil) {
         guard currentUserId != nil else {
@@ -194,15 +233,23 @@ final class ConversationManager: UnreadCountProviderBase {
         fetchMyConversations { [weak self] result in
             switch result {
             case .success(let list):
-                let count = list.filter { $0.hasUnread }.count
-                DispatchQueue.main.async {
-                    self?.unreadCount = count
-                    completion?()
+                let unreadChats = list.filter { $0.hasUnread }.count
+                // マッチングリクエスト数もバッジに含める
+                self?.fetchMyMatchRequests { reqResult in
+                    let pending = (try? reqResult.get().filter { $0.isNew }.count) ?? 0
+                    DispatchQueue.main.async {
+                        self?.unreadCount = unreadChats + pending
+                        completion?()
+                    }
                 }
             case .failure:
-                DispatchQueue.main.async {
-                    self?.unreadCount = 0
-                    completion?()
+                // 会話取得に失敗した場合でも、リクエストだけは表示する
+                self?.fetchMyMatchRequests { reqResult in
+                    let pending = (try? reqResult.get().filter { $0.isNew }.count) ?? 0
+                    DispatchQueue.main.async {
+                        self?.unreadCount = pending
+                        completion?()
+                    }
                 }
             }
         }

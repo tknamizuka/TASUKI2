@@ -7,6 +7,21 @@
 
 import SwiftUI
 
+// MARK: - Match Request Model（マッチングリクエストの一覧表示用）
+enum MatchRequestType: String {
+    case partner      = "パートナー申請"
+    case practice     = "練習会参加リクエスト"
+}
+
+struct MatchRequestSummary: Identifiable {
+    let id: String
+    let fromName: String
+    let type: MatchRequestType
+    let message: String
+    let createdAt: Date
+    let isNew: Bool
+}
+
 // MARK: - Message Conversation Model（バックエンドで一意の conversationId を持つ。既読・未読フラグ付き）
 struct MessageConversation: Identifiable {
     /// バックエンド（Firestore）で発行された一意の会話ID
@@ -17,29 +32,42 @@ struct MessageConversation: Identifiable {
     let timestamp: Date
     /// 未読があるか（lastMessageAt > 自分の lastReadAt）
     let hasUnread: Bool
+    /// 練習会チャットかどうか（partnerName や practiceId などで判定）
+    let isPractice: Bool
     
     var id: String { conversationId }
     
-    init(conversationId: String, partnerName: String, avatarImage: String? = "person.circle.fill", lastMessage: String, timestamp: Date = Date(), hasUnread: Bool = false) {
+    init(
+        conversationId: String,
+        partnerName: String,
+        avatarImage: String? = "person.circle.fill",
+        lastMessage: String,
+        timestamp: Date = Date(),
+        hasUnread: Bool = false,
+        isPractice: Bool = false
+    ) {
         self.conversationId = conversationId
         self.partnerName = partnerName
         self.avatarImage = avatarImage
         self.lastMessage = lastMessage
         self.timestamp = timestamp
         self.hasUnread = hasUnread
+        self.isPractice = isPractice
     }
 }
 
-// MARK: - チャット / メッセージ タブ
+// MARK: - チャット / メッセージ / リクエスト タブ
 enum MessageListTab: String, CaseIterable {
     case chat = "チャット"
     case message = "メッセージ"
+    case request = "リクエスト"
 }
 
 // MARK: - Message List View
 struct MessageListView: View {
     @State private var selectedTab: MessageListTab = .chat
     @State private var conversations: [MessageConversation] = []
+    @State private var requests: [MatchRequestSummary] = []
     @State private var isLoading = true
     @StateObject private var conversationManager = ConversationManager.shared
     
@@ -63,31 +91,95 @@ struct MessageListView: View {
                     
                     if isLoading {
                         ProgressView()
-                    } else if conversations.isEmpty {
-                        VStack {
-                            Text(selectedTab == .chat ? "チャットがありません" : "メッセージがありません")
-                                .font(.system(size: 16, weight: .regular))
-                                .foregroundColor(Color(hex: "0F1A2E").opacity(0.6))
-                        }
                     } else {
-                        List {
-                            ForEach(conversations) { conversation in
-                                NavigationLink(destination: ChatView(conversationId: conversation.conversationId, partnerName: conversation.partnerName)) {
-                                    conversationRowView(conversation: conversation)
+                        let practiceChats = conversations.filter { $0.isPractice }
+                        let userChats = conversations.filter { !$0.isPractice }
+                        
+                        switch selectedTab {
+                        case .chat:
+                            if practiceChats.isEmpty {
+                                VStack {
+                                    Text("練習会のチャットがありません")
+                                        .font(.system(size: 16, weight: .regular))
+                                        .foregroundColor(Color(hex: "0F1A2E").opacity(0.6))
                                 }
-                                .listRowBackground(Color.clear)
-                                .listRowSeparator(.hidden)
+                            } else {
+                                List {
+                                    ForEach(practiceChats) { conversation in
+                                        NavigationLink(
+                                            destination: ChatView(
+                                                conversationId: conversation.conversationId,
+                                                partnerName: conversation.partnerName
+                                            )
+                                        ) {
+                                            conversationRowView(conversation: conversation)
+                                        }
+                                        .listRowBackground(Color.clear)
+                                        .listRowSeparator(.hidden)
+                                    }
+                                }
+                                .listStyle(.plain)
+                                .scrollContentBackground(.hidden)
+                            }
+                        case .message:
+                            if userChats.isEmpty {
+                                VStack {
+                                    Text("メッセージがありません")
+                                        .font(.system(size: 16, weight: .regular))
+                                        .foregroundColor(Color(hex: "0F1A2E").opacity(0.6))
+                                }
+                            } else {
+                                List {
+                                    ForEach(userChats) { conversation in
+                                        NavigationLink(
+                                            destination: ChatView(
+                                                conversationId: conversation.conversationId,
+                                                partnerName: conversation.partnerName
+                                            )
+                                        ) {
+                                            conversationRowView(conversation: conversation)
+                                        }
+                                        .listRowBackground(Color.clear)
+                                        .listRowSeparator(.hidden)
+                                    }
+                                }
+                                .listStyle(.plain)
+                                .scrollContentBackground(.hidden)
+                            }
+                        case .request:
+                            if requests.isEmpty {
+                                VStack {
+                                    Text("リクエストがありません")
+                                        .font(.system(size: 16, weight: .regular))
+                                        .foregroundColor(Color(hex: "0F1A2E").opacity(0.6))
+                                }
+                            } else {
+                                List {
+                                    ForEach(requests) { req in
+                                        NavigationLink(
+                                            destination: RequestDetailView(request: req)
+                                        ) {
+                                            requestRowView(request: req)
+                                        }
+                                        .listRowBackground(Color.clear)
+                                        .listRowSeparator(.hidden)
+                                    }
+                                }
+                                .listStyle(.plain)
+                                .scrollContentBackground(.hidden)
                             }
                         }
-                        .listStyle(.plain)
-                        .scrollContentBackground(.hidden)
                     }
                 }
             }
-            .navigationTitle(selectedTab == .chat ? "チャット" : "メッセージ")
+            .navigationTitle(
+                selectedTab == .chat ? "チャット" :
+                selectedTab == .message ? "メッセージ" : "リクエスト"
+            )
             .navigationBarTitleDisplayMode(.large)
             .onAppear {
                 loadConversations()
+                loadRequests()
             }
         }
     }
@@ -149,6 +241,64 @@ struct MessageListView: View {
         .padding(.vertical, 4)
     }
     
+    // MARK: - Request Row View
+    private func requestRowView(request: MatchRequestSummary) -> some View {
+        HStack(spacing: 12) {
+            // 左: アイコン
+            Image(systemName: "person.crop.circle.badge.plus")
+                .font(.system(size: 40))
+                .foregroundColor(Color(hex: "0F1A2E"))
+                .saturation(0)
+                .frame(width: 48, height: 48)
+                .background(
+                    Circle()
+                        .fill(Color(hex: "F5F7FA"))
+                )
+            
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    if request.isNew {
+                        Circle()
+                            .fill(Color(hex: "2E5CFF"))
+                            .frame(width: 8, height: 8)
+                    }
+                    Text(request.fromName)
+                        .font(.system(size: 16, weight: request.isNew ? .bold : .semibold))
+                        .foregroundColor(Color(hex: "0F1A2E"))
+                        .lineLimit(1)
+                    Text(request.type.rawValue)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(Color(hex: "2E5CFF"))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(
+                            Capsule()
+                                .fill(Color(hex: "2E5CFF").opacity(0.1))
+                        )
+                }
+                
+                Text(request.message)
+                    .font(.system(size: 14))
+                    .foregroundColor(Color(hex: "0F1A2E").opacity(0.7))
+                    .lineLimit(2)
+                
+                Text(formatTime(request.createdAt))
+                    .font(.system(size: 11))
+                    .foregroundColor(Color(hex: "0F1A2E").opacity(0.4))
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.white)
+                .shadow(color: Color.black.opacity(0.03), radius: 2, x: 0, y: 1)
+        )
+        .padding(.horizontal, 16)
+        .padding(.vertical, 4)
+    }
+    
     // MARK: - Helper Methods
     private func formatTime(_ date: Date) -> String {
         let formatter = DateFormatter()
@@ -159,13 +309,14 @@ struct MessageListView: View {
     private func loadConversations() {
         isLoading = true
         conversationManager.fetchMyConversations { result in
-            isLoading = false
             switch result {
             case .success(let list):
                 conversations = list
+                loadRequests()
             case .failure:
                 // 未ログインや取得失敗時はサンプル表示（ローカル用の仮ID）
                 loadDummyConversations()
+                loadRequests()
             }
         }
     }
@@ -174,13 +325,34 @@ struct MessageListView: View {
         let calendar = Calendar.current
         let now = Date()
         conversations = [
+            // 参加予定の練習会チャット（サンプル）
+            MessageConversation(
+                conversationId: "dummy-practice-kokyo",
+                partnerName: "練習会: 皇居ラン 2周 ゆっくりペース",
+                avatarImage: "person.3.sequence.fill",
+                lastMessage: "集合は噴水前です。5分前には集まってください！",
+                timestamp: calendar.date(byAdding: .minute, value: -10, to: now) ?? now,
+                hasUnread: true,
+                isPractice: true
+            ),
+            MessageConversation(
+                conversationId: "dummy-practice-yoyogi",
+                partnerName: "練習会: 代々木公園ジョグ 60分",
+                avatarImage: "person.3.sequence.fill",
+                lastMessage: "ゆっくり6:30/kmペースで行きましょう。",
+                timestamp: calendar.date(byAdding: .hour, value: -2, to: now) ?? now,
+                hasUnread: false,
+                isPractice: true
+            ),
+            // 個別チャット（サンプル）
             MessageConversation(
                 conversationId: "dummy-tanaka",
                 partnerName: "Tanaka-san",
                 avatarImage: "person.circle.fill",
                 lastMessage: "週末の朝が良いです。6時頃からいかがでしょうか？",
                 timestamp: calendar.date(byAdding: .minute, value: -30, to: now) ?? now,
-                hasUnread: true
+                hasUnread: true,
+                isPractice: false
             ),
             MessageConversation(
                 conversationId: "dummy-sato",
@@ -188,7 +360,8 @@ struct MessageListView: View {
                 avatarImage: "person.circle.fill",
                 lastMessage: "明日の練習会、参加します！",
                 timestamp: calendar.date(byAdding: .hour, value: -1, to: now) ?? now,
-                hasUnread: true
+                hasUnread: true,
+                isPractice: false
             ),
             MessageConversation(
                 conversationId: "dummy-yamada",
@@ -196,7 +369,8 @@ struct MessageListView: View {
                 avatarImage: "person.circle.fill",
                 lastMessage: "了解しました。では明日の朝6時に待ち合わせましょう。",
                 timestamp: calendar.date(byAdding: .hour, value: -2, to: now) ?? now,
-                hasUnread: true
+                hasUnread: true,
+                isPractice: false
             ),
             MessageConversation(
                 conversationId: "dummy-suzuki",
@@ -204,17 +378,104 @@ struct MessageListView: View {
                 avatarImage: "person.circle.fill",
                 lastMessage: "ありがとうございます！一緒に走りましょう！",
                 timestamp: calendar.date(byAdding: .day, value: -1, to: now) ?? now,
-                hasUnread: false
-            ),
-            MessageConversation(
-                conversationId: "dummy-watanabe",
-                partnerName: "Watanabe-san",
-                avatarImage: "person.circle.fill",
-                lastMessage: "ハーフマラソン、完走お疲れ様でした！",
-                timestamp: calendar.date(byAdding: .day, value: -2, to: now) ?? now,
-                hasUnread: false
-            ),
+                hasUnread: false,
+                isPractice: false
+            )
         ]
+        isLoading = false
+    }
+    
+    private func loadRequests() {
+        conversationManager.fetchMyMatchRequests { result in
+            isLoading = false
+            switch result {
+            case .success(let list):
+                requests = list.sorted { $0.createdAt > $1.createdAt }
+            case .failure:
+                requests = []
+            }
+        }
+    }
+}
+
+// MARK: - Request Detail View（簡易版）
+struct RequestDetailView: View {
+    let request: MatchRequestSummary
+    @Environment(\.dismiss) var dismiss
+    
+    var body: some View {
+        VStack(spacing: 24) {
+            // 送信者情報
+            VStack(spacing: 12) {
+                Image(systemName: "person.circle.fill")
+                    .font(.system(size: 64))
+                    .foregroundColor(Color(hex: "0F1A2E"))
+                    .saturation(0)
+                Text(request.fromName)
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(Color(hex: "0F1A2E"))
+                Text(request.type.rawValue)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(Color(hex: "2E5CFF"))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(
+                        Capsule()
+                            .fill(Color(hex: "2E5CFF").opacity(0.1))
+                    )
+            }
+            .padding(.top, 32)
+            
+            // リクエスト内容
+            VStack(alignment: .leading, spacing: 12) {
+                Text("リクエスト内容")
+                    .font(.headline)
+                    .foregroundColor(Color(hex: "0F1A2E"))
+                Text(request.message)
+                    .font(.body)
+                    .foregroundColor(Color(hex: "0F1A2E").opacity(0.8))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding()
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color(hex: "F5F7FA"))
+            )
+            .padding(.horizontal, 20)
+            
+            Spacer()
+            
+            // アクションボタン
+            VStack(spacing: 12) {
+                NavigationLink(
+                    destination: ChatView(conversationId: "request-\(request.id)", partnerName: request.fromName)
+                ) {
+                    Text("承認してチャットを開始")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color(hex: "0F1A2E"))
+                        .cornerRadius(30)
+                }
+                
+                Button(action: {
+                    dismiss()
+                }) {
+                    Text("今回は見送る")
+                        .font(.system(size: 15, weight: .regular))
+                        .foregroundColor(Color(hex: "0F1A2E").opacity(0.7))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 32)
+        }
+        .background(Color.white)
+        .navigationTitle("リクエスト詳細")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
