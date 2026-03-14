@@ -24,11 +24,16 @@ struct MyProfileView: View {
     // Stats
     @AppStorage("myAvgPace") private var avgPace: String = "5:30/km"
     @AppStorage("myMonthlyDist") private var monthlyDist: String = "150km"
+    @AppStorage("myTotalPoints") private var myTotalPoints: Int = 0
     
     // Bio
     @AppStorage("myBio") private var bio: String = "平日は仕事終わりに5-10km走ってます！週末は距離走やりたいです。"
     @State private var userUUID: String = ""
     @State private var showCopiedToast: Bool = false
+
+    private var myBadgeTier: PointBadgeTier? {
+        PointBadgeHelper.tier(forTotalPoints: myTotalPoints)
+    }
 
     var body: some View {
         NavigationStack {
@@ -71,6 +76,19 @@ struct MyProfileView: View {
                                     .font(.system(size: 16, weight: .semibold))
                                     .foregroundColor(Color.royalBlue)
                                     .frame(maxWidth: .infinity, alignment: .center)
+
+                                // ポイントバッジ（累計ポイントに応じて表示）
+                                if let tier = myBadgeTier {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: tier.iconName)
+                                            .font(.system(size: 14, weight: .semibold))
+                                            .foregroundColor(tier.color)
+                                        Text(tier.displayName)
+                                            .font(.system(size: 13, weight: .semibold))
+                                            .foregroundColor(Color(hex: "0F1A2E"))
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .center)
+                                }
 
                                 // UUID（3行目、中央揃え） + コピー
                                 HStack(spacing: 8) {

@@ -20,9 +20,29 @@ struct TeamDetailView: View {
     var body: some View {
         VStack(spacing: 16) {
             if let data = teamData {
-                Text(data["name"] as? String ?? "Team")
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundColor(Color(hex: "0F1A2E"))
+                HStack(alignment: .center, spacing: 12) {
+                    Text(data["name"] as? String ?? "Team")
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundColor(Color(hex: "0F1A2E"))
+                    let total = (data["teamTotalPoints"] as? Int) ?? PointService.shared.teamTotalPoints(teamId: teamId)
+                    let tier = TeamRankTier.tier(forTeamPoints: total)
+                    Text(tier.displayName)
+                        .font(.system(size: 12, weight: .semibold))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(tier.color.opacity(0.2)))
+                        .foregroundColor(tier.color)
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text("\(total)pt")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(Color(hex: "0F1A2E"))
+                        Text("累計")
+                            .font(.system(size: 10))
+                            .foregroundColor(.gray)
+                    }
+                }
+                .padding(.horizontal, 20)
 
                 HStack {
                     Text("招待コード: ")

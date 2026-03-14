@@ -661,9 +661,36 @@ struct ProfileRegistrationView: View {
                     let result = try await Auth.auth().signInAnonymously()
                     firebaseUser = result.user
                 } catch {
+                    // Firebase 未設定やネットワーク不通などで匿名ログインに失敗した場合は
+                    // ローカルのみでプロフィール情報を保存してモックフローとして完了させる
+                    let gender = selectedGender ?? "無回答"
+                    let purpose = selectedPurposes.isEmpty ? "その他" : selectedPurposes.joined(separator: ", ")
+                    
+                    // 生年月日から年齢を計算
+                    let calendar = Calendar.current
+                    let ageComponents = calendar.dateComponents([.year], from: birthDate, to: Date())
+                    let computedAge = ageComponents.year ?? 0
+                    
+                    let runMinutesInt = Int(runMinutes.trimmingCharacters(in: .whitespaces))
+                    let computedRank = computeRank(category: selectedRunCategory, minutes: runMinutesInt)
+                    
+                    // ランク情報をローカルに保持（検索・マッチング用）
+                    UserDefaults.standard.set(computedRank, forKey: "myRank")
+                    if selectedRunCategory == "フル", let min = runMinutesInt {
+                        UserDefaults.standard.set(formatMinutesToTimeLabel(min), forKey: "myBestFull")
+                    }
+                    if selectedRunCategory == "ハーフ", let min = runMinutesInt {
+                        UserDefaults.standard.set(formatMinutesToTimeLabel(min), forKey: "myBestHalf")
+                    }
+                    // 表示用の基本プロフィールもローカルに保存
+                    UserDefaults.standard.set(username, forKey: "myName")
+                    UserDefaults.standard.set(selectedPrefecture + " " + activityArea, forKey: "myArea")
+                    
                     await MainActor.run {
                         self.isSaving = false
-                        self.saveErrorMessage = "ログイン情報の取得に失敗しました。時間をおいて再度お試しください。"
+                        self.skipProfileRegistration = false
+                        // Firebase には保存せず、モック完了としてホームへ遷移
+                        self.onComplete?()
                     }
                     return
                 }
@@ -726,6 +753,8 @@ struct ProfileRegistrationView: View {
                 monthlyDistance: 0,
                 monthlyTarget: 0,
                 avgPace: "",
+                totalPoints: 0,
+                monthlyPoints: 0,
                 matchRate: 0,
                 lastLogin: Date(),
                 spotName: activityArea,

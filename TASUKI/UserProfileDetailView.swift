@@ -78,6 +78,25 @@ struct UserProfileDetailView: View {
                                     .fill(Color(hex: "0F1A2E"))
                             )
                         
+                        // ポイントバッジ（累計ポイントに応じて表示）
+                        if let tier = PointBadgeHelper.tier(forTotalPoints: user.totalPoints) {
+                            HStack(spacing: 4) {
+                                Image(systemName: tier.iconName)
+                                    .font(.caption)
+                                    .foregroundColor(tier.color)
+                                Text(tier.displayName)
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(Color(hex: "0F1A2E"))
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color(hex: "0F1A2E").opacity(0.06))
+                            )
+                        }
+                        
                         // Purposeタグ
                         Text(user.purpose)
                             .font(.caption)

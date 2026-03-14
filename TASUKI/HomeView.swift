@@ -21,6 +21,7 @@ struct HomeView: View {
     @State private var showPracticeCalendar = false
     @EnvironmentObject private var unreadProvider: UnreadCountProviderBase
     @EnvironmentObject private var joinedPracticesStore: JoinedPracticesStore
+    @AppStorage("myTotalPoints") private var myTotalPoints: Int = 0
     
     init(
         currentDistance: Double = 0.0,
@@ -143,7 +144,7 @@ struct HomeView: View {
                     .tracking(2)
                 
                 HStack(alignment: .lastTextBaseline, spacing: 5) {
-                    Text("12,500")
+                    Text("\(myTotalPoints)")
                         .font(.system(size: 44, weight: .bold)) 
                         .foregroundColor(Color(hex: "0F1A2E"))
                     
@@ -152,6 +153,13 @@ struct HomeView: View {
                         .fontWeight(.bold)
                         .foregroundColor(.gray)
                         .padding(.bottom, 4) // ベースライン微調整
+                }
+                
+                NavigationLink(destination: RankingView()) {
+                    Text("ランキングを見る")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(Color(hex: "2E5CFF"))
+                        .padding(.top, 4)
                 }
             }
             .padding(.bottom, 50)

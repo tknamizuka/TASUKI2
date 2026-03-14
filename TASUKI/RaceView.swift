@@ -443,6 +443,12 @@ struct RaceResultsView: View {
         .padding()
         .onAppear {
             raceManager.startListening(raceId: raceId)
+            let participants = ranked.map { (id: $0.id, name: $0.name) }
+            PointService.shared.awardRacePointsIfNeeded(
+                raceId: raceId,
+                participants: participants,
+                isSample: raceId.hasPrefix("sample_")
+            )
         }
         .onDisappear {
             raceManager.stopListening()

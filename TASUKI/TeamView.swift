@@ -137,8 +137,10 @@ struct TeamView: View {
                 // 未所属の場合、チーム参加/作成画面を表示
                 TeamJoinCreateView(onComplete: { teamId in
                     if isSampleTeamFlow {
-                        // サンプルフローではローカルで所属状態を持つ
                         self.userTeamId = teamId
+                        if let id = teamId {
+                            UserDefaults.standard.set(id, forKey: "myTeamId")
+                        }
                     } else {
                         loadUserTeamId()
                     }
@@ -256,6 +258,12 @@ struct TeamView: View {
                         isTeamOwner = false
                     }
                 }
+            }
+        }
+        .onAppear {
+            if userTeamId == nil, isSampleTeamFlow, let savedId = UserDefaults.standard.string(forKey: "myTeamId"), !savedId.isEmpty {
+                userTeamId = savedId
+                selectedTeamId = savedId
             }
         }
     } // body の閉じ (修正箇所)
@@ -403,6 +411,34 @@ struct TeamView: View {
     // MARK: - Progress View (The Tasuki Bar)
     private var progressView: some View {
         VStack(spacing: 16) {
+            HStack(spacing: 8) {
+                Text(teamName)
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(Color(hex: "0F1A2E"))
+                if !selectedTeamId.isEmpty {
+                    let total = PointService.shared.teamTotalPoints(teamId: selectedTeamId)
+                    let tier = TeamRankTier.tier(forTeamPoints: total)
+                    Text(tier.displayName)
+                        .font(.system(size: 11, weight: .semibold))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(tier.color.opacity(0.2)))
+                        .foregroundColor(tier.color)
+                }
+                Spacer()
+                if !selectedTeamId.isEmpty {
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text("\(PointService.shared.teamTotalPoints(teamId: selectedTeamId))pt")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(Color(hex: "0F1A2E"))
+                        Text("累計")
+                            .font(.system(size: 10))
+                            .foregroundColor(.gray)
+                    }
+                }
+            }
+            .padding(.bottom, 4)
+            
             Text("\(Int(progressPercentage))%")
                 .font(.system(size: 56, weight: .bold))
                 .foregroundColor(Color(hex: "2E5CFF"))
