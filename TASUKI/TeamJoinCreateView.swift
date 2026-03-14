@@ -140,15 +140,15 @@ struct TeamJoinCreateView: View {
         isProcessing = true
         errorMessage = nil
         
-        // モックフロー（プレビュー/デバッグ用）
+        // モックフロー（プレビュー/未ログイン時など）: サンプルチームをオーナーとして作成した状態を再現
         if useMockFlow {
             let inviteCode = randomInviteCode()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 self.createdInviteCode = inviteCode
                 self.isProcessing = false
                 self.showCreateForm = false
-                // サンプルチームIDとして "example" を返す
-                self.onComplete?("example")
+                // サンプルチームIDとして「オーナー視点」の example_owner を返す
+                self.onComplete?("example_owner")
             }
             return
         }
@@ -220,9 +220,9 @@ struct TeamJoinCreateView: View {
         if useMockFlow {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                 if !self.teamNameInput.trimmingCharacters(in: .whitespaces).isEmpty {
-                    // 招待コードで直接参加（モック）
+                    // 招待コードで直接参加（モック）: メンバー視点の example_member に参加したことにする
                     self.isProcessing = false
-                    self.onComplete?("example")
+                    self.onComplete?("example_member")
                     return
                 }
                 let prefix = self.searchNameInput.trimmingCharacters(in: .whitespaces)
@@ -231,9 +231,9 @@ struct TeamJoinCreateView: View {
                     self.isProcessing = false
                     return
                 }
-                // モックの検索結果
+                // モックの検索結果（メンバーとして参加する想定のチーム）
                 self.searchResults = [
-                    TeamCandidate(id: "example", name: "皇居ランナーズ", requiresApproval: true, inviteCode: "EX1234")
+                    TeamCandidate(id: "example_member", name: "皇居ランナーズ", requiresApproval: true, inviteCode: "EX1234")
                 ]
                 self.isProcessing = false
                 self.showResultsSheet = true
@@ -285,7 +285,7 @@ struct TeamJoinCreateView: View {
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 self.searchResults = [
-                    TeamCandidate(id: "example", name: "皇居ランナーズ", requiresApproval: true, inviteCode: "EX1234")
+                    TeamCandidate(id: "example_member", name: "皇居ランナーズ", requiresApproval: true, inviteCode: "EX1234")
                 ]
                 self.isProcessing = false
                 self.showResultsSheet = true
@@ -334,17 +334,17 @@ struct TeamJoinCreateView: View {
         // モックフロー対応
         if useMockFlow {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                // サンプルチーム "example" は承認制にしておく
-                let requiresApproval = (teamId == "example")
+                // サンプルチーム example_member は承認制にしておく
+                let requiresApproval = (teamId == "example_member")
                 self.isProcessing = false
                 if requiresApproval && !byInvite {
-                    // 申請送信
+                    // 申請送信だけ行った状態（まだ参加していない）
                     self.showSearchForm = false
                     self.onComplete?(nil)
                 } else {
-                    // 直接参加
+                    // 直接参加（メンバーとして参加完了）
                     self.showSearchForm = false
-                    self.onComplete?("example")
+                    self.onComplete?("example_member")
                 }
             }
             return

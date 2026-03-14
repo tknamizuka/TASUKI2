@@ -123,17 +123,27 @@ struct TeamView: View {
         return formatter.string(from: monthEndDate)
     }
     
+    /// 本番かつ未ログインでは EKIDEN チームフローをサンプル（モック）で動かす
+    private var isSampleTeamFlow: Bool {
+        useMockTeamFlow || Auth.auth().currentUser == nil
+    }
+    
     var body: some View {
         NavigationStack {
             if userTeamId == nil {
                 // 未所属の場合、チーム参加/作成画面を表示
                 TeamJoinCreateView(onComplete: { teamId in
-                    loadUserTeamId()
+                    if isSampleTeamFlow {
+                        // サンプルフローではローカルで所属状態を持つ
+                        self.userTeamId = teamId
+                    } else {
+                        loadUserTeamId()
+                    }
                     if let id = teamId {
                         self.selectedTeamId = id
                         self.showTeamDetail = true
                     }
-                }, useMockFlow: useMockTeamFlow)
+                }, useMockFlow: isSampleTeamFlow)
                 .navigationTitle("EKIDEN MODE")
                 .navigationBarTitleDisplayMode(.large)
             } else {
@@ -205,7 +215,9 @@ struct TeamView: View {
                 }
                 .onAppear {
                     selectedCondition = myCondition
-                    loadUserTeamId()
+                    if !isSampleTeamFlow {
+                        loadUserTeamId()
+                    }
                 }
             }
         }

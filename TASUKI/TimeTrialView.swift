@@ -295,6 +295,12 @@ struct TimeTrialRoomView: View {
         guard let room = room else { return }
         healthKitLoading = true
         healthKitError = nil
+        // サンプル部屋のときは HealthKit を使わずサンプル記録を表示
+        if room.id.hasPrefix("sample_") {
+            healthKitWorkouts = makeSampleWorkouts(for: room)
+            healthKitLoading = false
+            return
+        }
         let targetKm = room.distanceKm
         let minKm = targetKm * 0.9
         HealthKitManager.shared.fetchRunningWorkouts(from: room.periodStart, to: room.periodEnd, minDistanceKm: minKm, targetDistanceKm: targetKm) { result in
@@ -307,6 +313,31 @@ struct TimeTrialRoomView: View {
                 healthKitError = e.localizedDescription
                 healthKitWorkouts = []
             }
+        }
+    }
+    
+    /// サンプル部屋用のランニング記録（提出可能な複数件）
+    private func makeSampleWorkouts(for room: TimeTrialRoom) -> [RunningWorkoutInfo] {
+        let targetKm = room.distanceKm
+        let now = Date()
+        // 目標距離付近・提出可能なタイムのバリエーション
+        let samples: [(Double, Double)] = [
+            (targetKm * 0.98, 18 * 60 + 45),
+            (targetKm * 1.00, 19 * 60 + 10),
+            (targetKm * 1.02, 19 * 60 + 35),
+            (targetKm * 0.97, 20 * 60),
+            (targetKm * 1.03, 20 * 60 + 25)
+        ]
+        return samples.enumerated().map { index, pair in
+            let (dist, sec) = pair
+            let start = Calendar.current.date(byAdding: .day, value: -index - 1, to: now) ?? now
+            return RunningWorkoutInfo(
+                id: UUID(),
+                startDate: start,
+                durationSeconds: sec,
+                totalDistanceKm: dist,
+                timeAtTargetSeconds: sec
+            )
         }
     }
     

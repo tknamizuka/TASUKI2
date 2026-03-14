@@ -64,7 +64,7 @@ struct TeamDetailView: View {
                 }
 
                 // 参加ボタン（自分がメンバーでもオーナーでもない場合のみ）
-                if let currentUid = Auth.auth().currentUser?.uid,
+                if let currentUid = effectiveCurrentUid,
                    !memberUIDs.contains(currentUid),
                    ownerUid != currentUid {
                     Button(action: { Task { await joinCurrentTeam() } }) {
@@ -88,7 +88,7 @@ struct TeamDetailView: View {
         }
         .navigationTitle("チーム詳細")
         .toolbar {
-            if ownerUid == Auth.auth().currentUser?.uid {
+            if let currentUid = effectiveCurrentUid, ownerUid == currentUid {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     NavigationLink(destination: TeamManageView(teamId: teamId)) {
                         Text("参加申請")
@@ -108,9 +108,35 @@ struct TeamDetailView: View {
             ShareSheet(activityItems: [shareText])
         }
     }
+    
+    /// サンプル用: 未ログインでも teamId に応じて「自分のUID相当」を決める
+    private var effectiveCurrentUid: String? {
+        if let uid = Auth.auth().currentUser?.uid { return uid }
+        switch teamId {
+        case "example_owner":
+            return "sample_owner"
+        case "example_member":
+            return "sample_member"
+        default:
+            return nil
+        }
+    }
 
     // MARK: - チーム参加処理
     private func joinCurrentTeam() async {
+        // サンプルチーム（example_member）の場合はローカルで擬似参加処理のみ行う
+        if teamId == "example_member", let currentUid = effectiveCurrentUid {
+            await MainActor.run {
+                if !memberUIDs.contains(currentUid) {
+                    memberUIDs.append(currentUid)
+                    membersInfo.append("あなた")
+                }
+                alertMessage = "チームに参加しました。（サンプル）"
+                onJoined?(teamId)
+            }
+            return
+        }
+        
         guard let currentUid = Auth.auth().currentUser?.uid else {
             alertMessage = "ログインユーザーが見つかりません。"
             return
@@ -147,16 +173,31 @@ struct TeamDetailView: View {
     }
 
     private func loadTeam() async {
-        // プレビュー/サンプル用
-        if teamId == "example" {
+        // プレビュー/サンプル用（オーナー視点）
+        if teamId == "example_owner" {
             await MainActor.run {
                 self.teamData = [
                     "name": "皇居ランナーズ",
                     "inviteCode": "EX1234",
                     "requiresApproval": true,
-                    "members": ["u_kenji", "u_sacchan", "u_taka"]
+                    "members": ["sample_owner", "u_kenji", "u_sacchan", "u_taka"]
                 ]
-                self.memberUIDs = ["u_kenji", "u_sacchan", "u_taka"]
+                self.memberUIDs = ["sample_owner", "u_kenji", "u_sacchan", "u_taka"]
+                self.ownerUid = "sample_owner"
+                self.membersInfo = ["あなた（オーナー）", "Kenji_Run", "さっちゃん", "Taka@Sub3"]
+            }
+            return
+        }
+        // プレビュー/サンプル用（メンバー視点）
+        if teamId == "example_member" {
+            await MainActor.run {
+                self.teamData = [
+                    "name": "皇居ランナーズ",
+                    "inviteCode": "EX1234",
+                    "requiresApproval": true,
+                    "members": ["u_owner", "u_kenji", "u_sacchan", "u_taka"]
+                ]
+                self.memberUIDs = ["u_owner", "u_kenji", "u_sacchan", "u_taka"]
                 self.ownerUid = "u_owner"
                 self.membersInfo = ["Kenji_Run", "さっちゃん", "Taka@Sub3"]
             }
