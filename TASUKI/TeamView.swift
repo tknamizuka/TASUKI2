@@ -48,6 +48,9 @@ struct TeamView: View {
     // チームチャットシート
     @State private var showTeamChatSheet = false
     
+    // オーナーかどうか（メンバー管理の表示用）
+    @State private var isTeamOwner: Bool = false
+    
     // チーム情報
     @State private var teamName: String = "皇居ランナーズ"
     @State private var league: String = "Gold League"
@@ -160,6 +163,28 @@ struct TeamView: View {
                             slimMemberListView
                                 .padding(.horizontal, 20)
                             
+                            // オーナーのみ: メンバー管理（参加申請・チーム詳細）へ
+                            if isTeamOwner {
+                                Button(action: { showTeamDetail = true }) {
+                                    HStack {
+                                        Spacer()
+                                        Text("メンバー管理")
+                                            .font(.system(size: 16, weight: .semibold))
+                                            .foregroundColor(.white)
+                                        Image(systemName: "person.2.fill")
+                                            .font(.system(size: 16))
+                                            .foregroundColor(.white)
+                                        Spacer()
+                                    }
+                                    .frame(height: 50)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(Color(hex: "0F1A2E"))
+                                    )
+                                }
+                                .padding(.horizontal, 20)
+                            }
+                            
                             Button(action: {
                                 showTeamChatSheet = true
                             }) {
@@ -207,6 +232,8 @@ struct TeamView: View {
                 }
                 .sheet(isPresented: $showTeamChatSheet) {
                     TeamChatSheetView(
+                        teamId: selectedTeamId,
+                        isSampleTeam: isSampleTeamFlow || selectedTeamId.hasPrefix("example_"),
                         teamMessages: $teamMessages,
                         myName: myName,
                         myCondition: myCondition,
@@ -217,6 +244,16 @@ struct TeamView: View {
                     selectedCondition = myCondition
                     if !isSampleTeamFlow {
                         loadUserTeamId()
+                    }
+                    if let tid = userTeamId, !tid.isEmpty {
+                        loadTeamOwner(teamId: tid)
+                    }
+                }
+                .onChange(of: userTeamId) { _, newId in
+                    if let tid = newId, !tid.isEmpty {
+                        loadTeamOwner(teamId: tid)
+                    } else {
+                        isTeamOwner = false
                     }
                 }
             }
@@ -235,6 +272,29 @@ struct TeamView: View {
                 DispatchQueue.main.async {
                     self.userTeamId = nil
                 }
+            }
+        }
+    }
+    
+    /// チームのオーナーかどうかを取得（メンバー管理ボタン表示用）
+    private func loadTeamOwner(teamId: String) {
+        // サンプルチーム: example_owner のときだけオーナー
+        if teamId == "example_owner" || teamId == "example_member" {
+            isTeamOwner = (teamId == "example_owner")
+            return
+        }
+        guard let currentUid = Auth.auth().currentUser?.uid else {
+            isTeamOwner = false
+            return
+        }
+        let db = Firestore.firestore()
+        db.collection("teams").document(teamId).getDocument { snapshot, _ in
+            guard let data = snapshot?.data(), let ownerUid = data["ownerUid"] as? String else {
+                DispatchQueue.main.async { self.isTeamOwner = false }
+                return
+            }
+            DispatchQueue.main.async {
+                self.isTeamOwner = (ownerUid == currentUid)
             }
         }
     }
@@ -435,8 +495,11 @@ struct TeamView: View {
     }
 }
 
-// MARK: - Team Chat Sheet View
+// MARK: - Team Chat Sheet View（TeamView 内専用。HomeView のメッセージとは連携しない）
 struct TeamChatSheetView: View {
+    let teamId: String
+    /// サンプルチームのときはローカルの Binding のみ使用。本番チームでは Firestore teams/{teamId}/teamChat を使用
+    var isSampleTeam: Bool = false
     @Binding var teamMessages: [TeamMessage]
     let myName: String
     let myCondition: Condition
@@ -445,6 +508,14 @@ struct TeamChatSheetView: View {
     @State private var messageText: String = ""
     @FocusState private var isTextFieldFocused: Bool
     @Environment(\.dismiss) var dismiss
+    
+    /// 本番チーム用: Firestore から取得したメッセージ（HomeView の会話とは別コレクション）
+    @State private var firestoreMessages: [TeamMessage] = []
+    @State private var chatListener: ListenerRegistration?
+    
+    private var displayedMessages: [TeamMessage] {
+        isSampleTeam ? teamMessages : firestoreMessages
+    }
     
     var body: some View {
         NavigationStack {
@@ -456,7 +527,7 @@ struct TeamChatSheetView: View {
                     ScrollViewReader { proxy in
                         ScrollView {
                             VStack(spacing: 12) {
-                                ForEach(teamMessages) { message in
+                                ForEach(displayedMessages) { message in
                                     messageBubbleView(message: message)
                                         .id(message.id)
                                 }
@@ -464,8 +535,8 @@ struct TeamChatSheetView: View {
                             .padding(.horizontal, 16)
                             .padding(.vertical, 16)
                         }
-                        .onChange(of: teamMessages.count) { _ in
-                            if let lastMessage = teamMessages.last {
+                        .onChange(of: displayedMessages.count) { _ in
+                            if let lastMessage = displayedMessages.last {
                                 withAnimation {
                                     proxy.scrollTo(lastMessage.id, anchor: .bottom)
                                 }
@@ -506,7 +577,7 @@ struct TeamChatSheetView: View {
                     .background(Color.white)
                 }
             }
-            .navigationTitle("Team Chat")
+            .navigationTitle("チームチャット")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -517,6 +588,66 @@ struct TeamChatSheetView: View {
                 }
             }
         }
+        .onAppear {
+            if !isSampleTeam && !teamId.isEmpty {
+                startTeamChatListener()
+            }
+        }
+        .onDisappear {
+            chatListener?.remove()
+            chatListener = nil
+        }
+    }
+    
+    /// 本番チーム用: teams/{teamId}/teamChat を監視（HomeView メッセージとは別）
+    private func startTeamChatListener() {
+        chatListener?.remove()
+        let db = Firestore.firestore()
+        chatListener = db.collection("teams").document(teamId).collection("teamChat")
+            .order(by: "timestamp", descending: false)
+            .addSnapshotListener { snapshot, error in
+                guard let docs = snapshot?.documents, error == nil else { return }
+                let list = docs.compactMap { doc -> TeamMessage? in
+                    let data = doc.data()
+                    let senderName = data["senderName"] as? String ?? ""
+                    let content = data["content"] as? String ?? ""
+                    let timestamp = (data["timestamp"] as? Timestamp)?.dateValue() ?? Date()
+                    let isSystem = data["isSystem"] as? Bool ?? false
+                    let id = UUID(uuidString: doc.documentID) ?? UUID()
+                    let user = minimalPartnerUser(name: senderName)
+                    return TeamMessage(id: id, user: user, content: content, timestamp: timestamp, isSystem: isSystem)
+                }
+                DispatchQueue.main.async {
+                    firestoreMessages = list
+                }
+            }
+    }
+    
+    private func minimalPartnerUser(name: String) -> PartnerUser {
+        PartnerUser(
+            name: name,
+            rank: "—",
+            avatarImage: "person.circle.fill",
+            isOnline: false,
+            bestCategory: .fiveK,
+            bestTime: "—",
+            age: 0,
+            runningSchedule: .flexible,
+            purpose: "",
+            nextRace: nil,
+            targetTime: nil,
+            runningSpots: [],
+            prefecture: "",
+            gender: .other,
+            condition: .good,
+            statusMessage: "",
+            ageGroup: "",
+            runningGoal: "",
+            personalBest: nil,
+            activeTime: "",
+            easyPace: "—",
+            connectionStyle: .both
+        )
     }
     
     @ViewBuilder
@@ -575,43 +706,48 @@ struct TeamChatSheetView: View {
     }
     
     private func sendMessage() {
-        guard !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return
+        let content = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !content.isEmpty else { return }
+        
+        if isSampleTeam {
+            let myUser = PartnerUser(
+                name: myName,
+                rank: "A",
+                avatarImage: "person.circle.fill",
+                isOnline: true,
+                bestCategory: .full,
+                bestTime: "3:10:00",
+                age: 29,
+                runningSchedule: .weekdayEvening,
+                purpose: "サブ3目標",
+                nextRace: nil,
+                targetTime: nil,
+                runningSpots: [],
+                prefecture: "Tokyo",
+                gender: .male,
+                condition: myCondition,
+                statusMessage: myStatusMessage,
+                ageGroup: "20s",
+                runningGoal: "Sub3",
+                personalBest: "3:10:00",
+                activeTime: "Night",
+                easyPace: "5:00/km",
+                connectionStyle: .both
+            )
+            let newMessage = TeamMessage(user: myUser, content: content, timestamp: Date(), isSystem: false)
+            teamMessages.append(newMessage)
+        } else {
+            // 本番チーム: Firestore に保存（HomeView のメッセージとは連携しない）
+            let senderId = Auth.auth().currentUser?.uid ?? "anonymous"
+            let db = Firestore.firestore()
+            db.collection("teams").document(teamId).collection("teamChat").addDocument(data: [
+                "senderId": senderId,
+                "senderName": myName,
+                "content": content,
+                "timestamp": Timestamp(date: Date()),
+                "isSystem": false
+            ]) { _ in }
         }
-        
-        let myUser = PartnerUser(
-            name: myName,
-            rank: "A",
-            avatarImage: "person.circle.fill",
-            isOnline: true,
-            bestCategory: .full,
-            bestTime: "3:10:00",
-            age: 29,
-            runningSchedule: .weekdayEvening,
-            purpose: "サブ3目標",
-            nextRace: nil,
-            targetTime: nil,
-            runningSpots: [],
-            prefecture: "Tokyo",
-            gender: .male,
-            condition: myCondition,
-            statusMessage: myStatusMessage,
-            ageGroup: "20s",
-            runningGoal: "Sub3",
-            personalBest: "3:10:00",
-            activeTime: "Night",
-            easyPace: "5:00/km",
-            connectionStyle: .both
-        )
-        
-        let newMessage = TeamMessage(
-            user: myUser,
-            content: messageText,
-            timestamp: Date(),
-            isSystem: false
-        )
-        
-        teamMessages.append(newMessage)
         messageText = ""
         isTextFieldFocused = false
     }

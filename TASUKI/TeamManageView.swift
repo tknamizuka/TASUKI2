@@ -55,8 +55,8 @@ struct TeamManageView: View {
         isLoading = true
         errorMessage = nil
         requests = []
-        // プレビューやサンプル表示用: teamId == "example" のときはモックデータを返す
-        if teamId == "example" {
+        // プレビューやサンプル表示用: example / example_owner のときはモックデータを返す
+        if teamId == "example" || teamId == "example_owner" {
             await MainActor.run {
                 self.requests = [
                     JoinRequest(id: "r1", uid: "Kenji_Run", requestedAt: Date().addingTimeInterval(-3600)),
@@ -95,7 +95,7 @@ struct TeamManageView: View {
         Task {
             do {
                 // プレビュー用: モックデータの場合はローカルの配列を更新する
-                if teamId == "example" {
+                if teamId == "example" || teamId == "example_owner" {
                     await MainActor.run {
                         if let idx = requests.firstIndex(where: { $0.id == req.id }) {
                             requests.remove(at: idx)
@@ -123,7 +123,7 @@ struct TeamManageView: View {
         let db = Firestore.firestore()
         Task {
             do {
-                if teamId == "example" {
+                if teamId == "example" || teamId == "example_owner" {
                     await MainActor.run {
                         if let idx = requests.firstIndex(where: { $0.id == req.id }) {
                             requests.remove(at: idx)

@@ -571,11 +571,19 @@ let mockRecruitments: [PracticeRecruitment] = [
 // MARK: - Missing Definitions for Compatibility
 
 struct TeamMessage: Identifiable {
-    let id = UUID()
+    let id: UUID
     let user: PartnerUser
     let content: String
     let timestamp: Date
     let isSystem: Bool
+    
+    init(id: UUID = UUID(), user: PartnerUser, content: String, timestamp: Date, isSystem: Bool) {
+        self.id = id
+        self.user = user
+        self.content = content
+        self.timestamp = timestamp
+        self.isSystem = isSystem
+    }
     
     // 互換性のためのプロパティ
     var sender: User {
