@@ -44,7 +44,7 @@ struct PracticeScheduleCalendarView: View {
         return days
     }
     
-    /// ストアの参加予定 + サンプルスケジュール（表示専用。サンプルは chatId: nil）
+    /// ストアの参加予定 + サンプルスケジュール（表示用。サンプルもタップで PracticeDetailView → 練習会チャット利用可）
     private var allDisplayItems: [JoinedPracticeItem] {
         let sample = sampleScheduleItems(for: displayedMonth)
         let fromStore = store.items
@@ -60,7 +60,7 @@ struct PracticeScheduleCalendarView: View {
         return allDisplayItems.filter { calendar.isDate($0.date, equalTo: displayedMonth, toGranularity: .month) }
     }
     
-    /// 今月用のサンプルスケジュール（カレンダーに表示するだけ。チャットには飛ばない）
+    /// 今月用のサンプルスケジュール（参加予定として表示。タップで詳細→チャット利用可）
     private func sampleScheduleItems(for month: Date) -> [JoinedPracticeItem] {
         let cal = Calendar.current
         guard let start = cal.date(from: cal.dateComponents([.year, .month], from: month)),
@@ -86,10 +86,29 @@ struct PracticeScheduleCalendarView: View {
         }
     }
     
-    /// ストア + サンプルを合わせて、今月のうち練習がある日付の集合
+    /// 今月のうち参加予定（ストア+サンプル）がある日付の集合
     private var datesWithAnyPractices: Set<Date> {
         let inMonth = allDisplayItems.filter { calendar.isDate($0.date, equalTo: displayedMonth, toGranularity: .month) }
         return Set(inMonth.map { calendar.startOfDay(for: $0.date) })
+    }
+    
+    /// スケジュールの1件から PracticeDetailView 用の Practice を組み立てる
+    private func practiceFrom(item: JoinedPracticeItem) -> Practice {
+        Practice(
+            practiceId: item.practiceId,
+            chatId: item.chatId,
+            title: item.title,
+            location: item.location,
+            date: item.date,
+            category: .jog,
+            pace: "6:00 /km",
+            distance: "10km",
+            description: "参加予定の練習会です。練習会チャットでやり取りできます。",
+            organizer: mockUser,
+            maxParticipants: 10,
+            participantUserIds: [],
+            isJoined: true
+        )
     }
     
     private var sectionTitle: String {
@@ -185,17 +204,12 @@ struct PracticeScheduleCalendarView: View {
                     } else {
                         List {
                             ForEach(practicesForSelected) { item in
-                                if let chatId = item.chatId {
-                                    NavigationLink(destination: ChatView(conversationId: chatId, partnerName: item.title)) {
-                                        practiceRow(item, showChatHint: true)
-                                    }
-                                    .listRowBackground(Color.clear)
-                                    .listRowSeparator(.visible)
-                                } else {
-                                    practiceRow(item, showChatHint: false)
-                                        .listRowBackground(Color.clear)
-                                        .listRowSeparator(.visible)
+                                NavigationLink(destination: PracticeDetailView(practice: practiceFrom(item))
+                                    .environmentObject(store)) {
+                                    practiceRow(item, showChatHint: item.chatId != nil)
                                 }
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.visible)
                             }
                         }
                         .listStyle(.plain)
