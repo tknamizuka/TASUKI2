@@ -629,7 +629,7 @@ struct TeamChatSheetView: View {
             rank: "—",
             avatarImage: "person.circle.fill",
             isOnline: false,
-            bestCategory: .fiveK,
+            bestCategory: .fiveKm,
             bestTime: "—",
             age: 0,
             runningSchedule: .flexible,
