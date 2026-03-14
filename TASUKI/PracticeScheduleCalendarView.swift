@@ -204,7 +204,7 @@ struct PracticeScheduleCalendarView: View {
                     } else {
                         List {
                             ForEach(practicesForSelected) { item in
-                                NavigationLink(destination: PracticeDetailView(practice: practiceFrom(item))
+                                NavigationLink(destination: PracticeDetailView(practice: practiceFrom(item: item))
                                     .environmentObject(store)) {
                                     practiceRow(item, showChatHint: item.chatId != nil)
                                 }
