@@ -25,29 +25,37 @@ struct MainTabView: View {
                 }
                 .tag(1)
             
-            // タブ3: EKIDEN
+            // タブ3: タイムトライアル（TimeTrialEntryView が内部で NavigationStack を持つ）
+            TimeTrialEntryView()
+                .tabItem {
+                Image(systemName: "stopwatch.fill")
+                Text("タイムトライアル")
+            }
+            .tag(2)
+            
+            // タブ4: EKIDEN
             TeamView()
                 .tabItem {
                     Image(systemName: "person.3.fill")
                     Text("EKIDEN")
                 }
-                .tag(2)
+                .tag(3)
             
-            // タブ4: Coach
+            // タブ5: Coach
             CoachView()
                 .tabItem {
                     Image(systemName: "graduationcap.fill")
                     Text("Coach")
                 }
-                .tag(3)
+                .tag(4)
             
-            // タブ5: Me
+            // タブ6: Me
             MyProfileView()
                 .tabItem {
                     Image(systemName: "person.fill")
                     Text("Me")
                 }
-                .tag(4)
+                .tag(5)
         }
         .tint(Color(hex: "0F1A2E"))
     }
