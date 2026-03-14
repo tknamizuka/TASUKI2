@@ -15,6 +15,8 @@ struct JoinedPracticeItem: Identifiable {
     let title: String
     let location: String
     let date: Date
+    /// 練習会チャットの会話ID。スケジュールからチャット画面へ遷移するときに使用
+    let chatId: String?
     
     var dateOnly: Date {
         Calendar.current.startOfDay(for: date)

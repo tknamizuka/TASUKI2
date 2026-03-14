@@ -44,9 +44,52 @@ struct PracticeScheduleCalendarView: View {
         return days
     }
     
+    /// ストアの参加予定 + サンプルスケジュール（表示専用。サンプルは chatId: nil）
+    private var allDisplayItems: [JoinedPracticeItem] {
+        let sample = sampleScheduleItems(for: displayedMonth)
+        let fromStore = store.items
+        let storeIds = Set(fromStore.map(\.practiceId))
+        let extraSamples = sample.filter { !storeIds.contains($0.practiceId) }
+        return (fromStore + extraSamples).sorted(by: { $0.date < $1.date })
+    }
+    
     private var practicesForSelected: [JoinedPracticeItem] {
-        guard let day = selectedDay else { return store.items.filter { calendar.isDate($0.date, equalTo: displayedMonth, toGranularity: .month) }.sorted(by: { $0.date < $1.date }) }
-        return store.items(on: day).sorted(by: { $0.date < $1.date })
+        if let day = selectedDay {
+            return allDisplayItems.filter { calendar.isDate($0.date, inSameDayAs: day) }
+        }
+        return allDisplayItems.filter { calendar.isDate($0.date, equalTo: displayedMonth, toGranularity: .month) }
+    }
+    
+    /// 今月用のサンプルスケジュール（カレンダーに表示するだけ。チャットには飛ばない）
+    private func sampleScheduleItems(for month: Date) -> [JoinedPracticeItem] {
+        let cal = Calendar.current
+        guard let start = cal.date(from: cal.dateComponents([.year, .month], from: month)),
+              let range = cal.range(of: .day, in: .month, for: start) else { return [] }
+        let baseDates: [(Int, String, String)] = [
+            (min(5, range.count), "皇居ラン", "皇居周辺"),
+            (min(12, range.count), "代々木公園ジョグ", "代々木公園"),
+            (min(18, range.count), "神宮外苑ゆっくり走", "神宮外苑"),
+            (min(22, range.count), "早朝ラン 5km", "芝公園"),
+            (min(28, range.count), "週末ロング走", "多摩川河川敷")
+        ]
+        return baseDates.compactMap { dayOffset, title, location in
+            guard let d = cal.date(byAdding: .day, value: dayOffset - 1, to: start) else { return nil }
+            let atNine = cal.date(bySettingHour: 9, minute: 0, second: 0, of: d) ?? d
+            return JoinedPracticeItem(
+                id: "sample-\(dayOffset)",
+                practiceId: "sample-p-\(dayOffset)",
+                title: title,
+                location: location,
+                date: atNine,
+                chatId: nil
+            )
+        }
+    }
+    
+    /// ストア + サンプルを合わせて、今月のうち練習がある日付の集合
+    private var datesWithAnyPractices: Set<Date> {
+        let inMonth = allDisplayItems.filter { calendar.isDate($0.date, equalTo: displayedMonth, toGranularity: .month) }
+        return Set(inMonth.map { calendar.startOfDay(for: $0.date) })
     }
     
     private var sectionTitle: String {
@@ -110,7 +153,8 @@ struct PracticeScheduleCalendarView: View {
                 LazyVGrid(columns: columns, spacing: 8) {
                     ForEach(Array(daysInMonth.enumerated()), id: \.offset) { _, dateOpt in
                         if let date = dateOpt {
-                            let hasPractice = store.datesWithPractices(in: displayedMonth).contains(calendar.startOfDay(for: date))
+                            let dayStart = calendar.startOfDay(for: date)
+                            let hasPractice = datesWithAnyPractices.contains(dayStart)
                             let isSelected = selectedDay.map { calendar.isDate(date, inSameDayAs: $0) } ?? false
                             dayCell(date: date, hasPractice: hasPractice, isSelected: isSelected)
                         } else {
@@ -141,7 +185,17 @@ struct PracticeScheduleCalendarView: View {
                     } else {
                         List {
                             ForEach(practicesForSelected) { item in
-                                practiceRow(item)
+                                if let chatId = item.chatId {
+                                    NavigationLink(destination: ChatView(conversationId: chatId, partnerName: item.title)) {
+                                        practiceRow(item, showChatHint: true)
+                                    }
+                                    .listRowBackground(Color.clear)
+                                    .listRowSeparator(.visible)
+                                } else {
+                                    practiceRow(item, showChatHint: false)
+                                        .listRowBackground(Color.clear)
+                                        .listRowSeparator(.visible)
+                                }
                             }
                         }
                         .listStyle(.plain)
@@ -190,16 +244,24 @@ struct PracticeScheduleCalendarView: View {
         .buttonStyle(.plain)
     }
     
-    private func practiceRow(_ item: JoinedPracticeItem) -> some View {
+    private func practiceRow(_ item: JoinedPracticeItem, showChatHint: Bool = false) -> some View {
         let timeStr: String = {
             let f = DateFormatter()
             f.dateFormat = "HH:mm"
             return f.string(from: item.date)
         }()
         return VStack(alignment: .leading, spacing: 4) {
-            Text(item.title)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(Color(hex: "0F1A2E"))
+            HStack {
+                Text(item.title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(Color(hex: "0F1A2E"))
+                Spacer()
+                if showChatHint {
+                    Image(systemName: "message.fill")
+                        .font(.system(size: 14))
+                        .foregroundColor(Color(hex: "2E5CFF"))
+                }
+            }
             HStack(spacing: 8) {
                 Text(timeStr)
                     .font(.caption)
@@ -210,8 +272,6 @@ struct PracticeScheduleCalendarView: View {
             }
         }
         .padding(.vertical, 8)
-        .listRowBackground(Color.clear)
-        .listRowSeparator(.visible)
     }
 }
 
@@ -219,8 +279,8 @@ struct PracticeScheduleCalendarView: View {
 #Preview("カレンダー（サンプルあり）") {
     let store = JoinedPracticesStore()
     let cal = Calendar.current
-    store.add(JoinedPracticeItem(id: "1", practiceId: "p1", title: "皇居ラン", location: "皇居", date: cal.date(byAdding: .day, value: 2, to: Date())!))
-    store.add(JoinedPracticeItem(id: "2", practiceId: "p2", title: "代々木ジョグ", location: "代々木公園", date: cal.date(byAdding: .day, value: 5, to: Date())!))
+    store.add(JoinedPracticeItem(id: "1", practiceId: "p1", title: "皇居ラン", location: "皇居", date: cal.date(byAdding: .day, value: 2, to: Date())!, chatId: "conv-p1"))
+    store.add(JoinedPracticeItem(id: "2", practiceId: "p2", title: "代々木ジョグ", location: "代々木公園", date: cal.date(byAdding: .day, value: 5, to: Date())!, chatId: nil))
     return PracticeScheduleCalendarView(store: store)
 }
 #endif

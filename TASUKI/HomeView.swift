@@ -252,7 +252,7 @@ struct HomeView: View {
 
 #Preview("未読・参加予定バッジあり") {
     let store = JoinedPracticesStore()
-    store.add(JoinedPracticeItem(id: "1", practiceId: "p1", title: "皇居ラン", location: "皇居", date: Date()))
+    store.add(JoinedPracticeItem(id: "1", practiceId: "p1", title: "皇居ラン", location: "皇居", date: Date(), chatId: nil))
     return NavigationStack {
         HomeView(
             currentDistance: 45.2,

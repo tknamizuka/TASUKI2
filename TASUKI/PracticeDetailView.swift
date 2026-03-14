@@ -294,7 +294,8 @@ struct PracticeDetailView: View {
                         practiceId: practice.practiceId,
                         title: practice.title,
                         location: practice.location,
-                        date: practice.date
+                        date: practice.date,
+                        chatId: practice.chatId
                     ))
                 }
             }
