@@ -77,7 +77,7 @@ struct CoachProfileView: View {
     // MARK: - Header Section
     private var headerSection: some View {
         VStack(spacing: 16) {
-                    // プロフィール画像（runner.imageset / yoshiki_hiro.jpg）
+            // プロフィール画像（yoshiki_hiro.imageset を想定）
             // 横幅・縦幅を固定し、サークルでクリップしてサイズ調整
             Image(coachProfile.imageName)
                 .resizable()
@@ -246,7 +246,7 @@ struct CoachProfileView: View {
                     "サブ4を目指す場合、週間距離はどのくらい必要ですか？",
                     "フルマラソンに向けた練習計画について"
                 ],
-                imageName: "runner"
+                imageName: "yoshiki_hiro"
             )
         default:
             return CoachProfile(
@@ -268,7 +268,7 @@ struct CoachProfileView: View {
                     "サブ4を目指す場合、週間距離はどのくらい必要ですか？",
                     "フルマラソンに向けた練習計画について"
                 ],
-                imageName: "runner"
+                imageName: "yoshiki_hiro"
             )
         }
     }
