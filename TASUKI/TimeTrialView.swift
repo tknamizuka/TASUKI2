@@ -103,13 +103,11 @@ struct TimeTrialRoomView: View {
     
     @State private var showSubmitSheet = false
     @State private var showResults = false
-    @State private var inputMinutes = ""
-    @State private var inputSeconds = ""
     @State private var isSubmitting = false
     @State private var submitError: String?
     @State private var ranking: [TimeTrialRankingEntry] = []
     
-    enum RecordSource { case choose, healthKit, manual }
+    enum RecordSource { case choose, healthKit }
     @State private var recordSource: RecordSource = .choose
     @State private var healthKitWorkouts: [RunningWorkoutInfo] = []
     @State private var healthKitLoading = false
@@ -236,10 +234,8 @@ struct TimeTrialRoomView: View {
             Group {
                 if recordSource == .choose {
                     recordSourceChoiceView(room: room)
-                } else if recordSource == .healthKit {
-                    healthKitWorkoutListView(room: room)
                 } else {
-                    manualTimeInputView(room: room)
+                    healthKitWorkoutListView(room: room)
                 }
             }
             .navigationTitle("タイム記録")
@@ -259,11 +255,7 @@ struct TimeTrialRoomView: View {
                 }
             }
         }
-        .onAppear {
-            inputMinutes = ""
-            inputSeconds = ""
-            submitError = nil
-        }
+        .onAppear { submitError = nil }
     }
     
     private func recordSourceChoiceView(room: TimeTrialRoom?) -> some View {
@@ -292,19 +284,6 @@ struct TimeTrialRoomView: View {
                 .frame(maxWidth: .infinity)
                 .padding()
                 .background(Color(hex: "2E5CFF"))
-                .cornerRadius(12)
-            }
-            .padding(.horizontal, 24)
-            Button(action: { recordSource = .manual }) {
-                HStack {
-                    Image(systemName: "keyboard")
-                    Text("手入力で記録")
-                }
-                .font(.headline)
-                .foregroundColor(Color(hex: "0F1A2E"))
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(Color(hex: "F5F7FA"))
                 .cornerRadius(12)
             }
             .padding(.horizontal, 24)
@@ -413,48 +392,6 @@ struct TimeTrialRoomView: View {
         return f.string(from: date)
     }
     
-    private func manualTimeInputView(room: TimeTrialRoom?) -> some View {
-        VStack(spacing: 24) {
-            Text("\(room?.distanceKm.clean ?? "0") km のタイムを入力")
-                .font(.headline)
-            HStack {
-                TextField("分", text: $inputMinutes)
-                    .keyboardType(.numberPad)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 80)
-                Text("分")
-                TextField("秒", text: $inputSeconds)
-                    .keyboardType(.numberPad)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 80)
-                Text("秒")
-            }
-            .padding(.horizontal)
-            if let err = submitError {
-                Text(err)
-                    .font(.caption)
-                    .foregroundColor(.red)
-            }
-            Button(action: submitTime) {
-                if isSubmitting {
-                    ProgressView()
-                        .tint(.white)
-                } else {
-                    Text("記録する")
-                }
-            }
-            .font(.headline)
-            .foregroundColor(.white)
-            .frame(maxWidth: .infinity)
-            .padding()
-            .background(Color(hex: "2E5CFF"))
-            .cornerRadius(12)
-            .disabled(isSubmitting)
-            Spacer()
-        }
-        .padding()
-    }
-    
     private func submitTimeWithSeconds(_ totalSeconds: Double) {
         isSubmitting = true
         submitError = nil
@@ -498,16 +435,6 @@ struct TimeTrialRoomView: View {
                 }
             }
         }
-    }
-    
-    private func submitTime() {
-        guard let m = Int(inputMinutes.trimmingCharacters(in: .whitespaces)),
-              let s = Int(inputSeconds.trimmingCharacters(in: .whitespaces)),
-              m >= 0, s >= 0, s < 60 else {
-            submitError = "分・秒を正しく入力してください"
-            return
-        }
-        submitTimeWithSeconds(Double(m * 60 + s))
     }
     
     private func loadRanking() {

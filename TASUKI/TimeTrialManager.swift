@@ -23,7 +23,15 @@ final class TimeTrialManager: ObservableObject {
     
     private init() {}
     
-    var currentUserId: String? { Auth.auth().currentUser?.uid }
+    /// ログイン中は Firebase UID、未ログインでサンプル部屋に入っている場合は "sample_user"
+    var currentUserId: String? {
+        if let uid = Auth.auth().currentUser?.uid { return uid }
+        if currentRoom?.id.hasPrefix("sample_") == true { return "sample_user" }
+        return nil
+    }
+    
+    private static let sampleRoomIdPrefix = "sample_"
+    private func isSampleRoom(_ roomId: String) -> Bool { roomId.hasPrefix(Self.sampleRoomIdPrefix) }
     
     /// "Rank S" -> "S", "Rank A" -> "A" など
     static func rankTier(fromRank rank: String?) -> String {
@@ -36,6 +44,11 @@ final class TimeTrialManager: ObservableObject {
     
     /// 同距離・同ランクで空きがある部屋を探す。なければ新規作成（期間1週間）
     func createOrJoinRoom(distance: TimeTrialDistance, userRank: String?, userName: String, completion: @escaping (Result<String, Error>) -> Void) {
+        if Auth.auth().currentUser == nil {
+            // サンプル: 未ログインでもマッチング以降に進める
+            completion(.success("sample_\(distance.rawValue)"))
+            return
+        }
         guard let uid = currentUserId else {
             completion(.failure(NSError(domain: "TimeTrialManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "未ログイン"])))
             return
@@ -117,6 +130,17 @@ final class TimeTrialManager: ObservableObject {
     // MARK: - Submit Time（期間中1回のみ）
     
     func submitTime(roomId: String, timeSeconds: Double, completion: @escaping (Result<Void, Error>) -> Void) {
+        if isSampleRoom(roomId) {
+            // サンプル: メモリ上の参加者を更新
+            if let i = participants.firstIndex(where: { $0.id == "sample_user" }) {
+                var p = participants[i]
+                p.submittedTimeSeconds = timeSeconds
+                p.submittedAt = Date()
+                participants[i] = p
+            }
+            DispatchQueue.main.async { completion(.success(())) }
+            return
+        }
         guard let uid = currentUserId else {
             completion(.failure(NSError(domain: "TimeTrialManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "未ログイン"])))
             return
@@ -166,6 +190,24 @@ final class TimeTrialManager: ObservableObject {
     
     /// 提出済みタイムでソートした順位リスト＋ポイント
     func fetchRanking(roomId: String, completion: @escaping (Result<[TimeTrialRankingEntry], Error>) -> Void) {
+        if isSampleRoom(roomId) {
+            let submitted = participants.compactMap { p -> (TimeTrialParticipant, Double)? in
+                guard let sec = p.submittedTimeSeconds else { return nil }
+                return (p, sec)
+            }
+            let sorted = submitted.sorted { $0.1 < $1.1 }
+            let entries = sorted.enumerated().map { index, item in
+                TimeTrialRankingEntry(
+                    id: item.0.id,
+                    rank: index + 1,
+                    name: item.0.name,
+                    timeSeconds: item.1,
+                    points: TimeTrialPoints.points(forRank: index + 1)
+                )
+            }
+            completion(.success(entries))
+            return
+        }
         fetchParticipants(roomId: roomId) { result in
             switch result {
             case .failure(let e):
@@ -193,6 +235,19 @@ final class TimeTrialManager: ObservableObject {
     // MARK: - Listeners
     
     func startListening(roomId: String) {
+        if isSampleRoom(roomId) {
+            roomListener?.remove()
+            participantsListener?.remove()
+            roomListener = nil
+            participantsListener = nil
+            let room = makeSampleRoom(roomId: roomId)
+            let list = makeSampleParticipants()
+            DispatchQueue.main.async { [weak self] in
+                self?.currentRoom = room
+                self?.participants = list
+            }
+            return
+        }
         roomListener?.remove()
         roomListener = db.collection("time_trial_rooms").document(roomId)
             .addSnapshotListener { [weak self] snapshot, error in
@@ -219,6 +274,54 @@ final class TimeTrialManager: ObservableObject {
                 let list = (snapshot?.documents ?? []).map { self.parseParticipant(id: $0.documentID, data: $0.data()) }
                 DispatchQueue.main.async { self.participants = list }
             }
+    }
+    
+    private func makeSampleRoom(roomId: String) -> TimeTrialRoom {
+        let dist: Double
+        if roomId == "sample_5k" { dist = 5.0 }
+        else if roomId == "sample_10k" { dist = 10.0 }
+        else if roomId == "sample_15k" { dist = 15.0 }
+        else { dist = 5.0 }
+        let now = Date()
+        let start = Calendar.current.startOfDay(for: now)
+        let end = Calendar.current.date(byAdding: .day, value: 7, to: start) ?? now
+        return TimeTrialRoom(
+            id: roomId,
+            distanceKm: dist,
+            rankTier: "B",
+            periodStart: start,
+            periodEnd: end,
+            createdAt: now
+        )
+    }
+    
+    private func makeSampleParticipants() -> [TimeTrialParticipant] {
+        let names = [
+            "あなた",
+            "ランナー1", "ランナー2", "ランナー3", "ランナー4", "ランナー5",
+            "ランナー6", "ランナー7", "ランナー8", "ランナー9", "ランナー10",
+            "ランナー11", "ランナー12", "ランナー13", "ランナー14", "ランナー15",
+            "ランナー16", "ランナー17", "ランナー18", "ランナー19"
+        ]
+        let ids = ["sample_user"] + (1...19).map { "sample_p\($0)" }
+        // 一部にサンプルタイムを入れて結果が見やすいように
+        let sampleTimes: [Double?] = [
+            nil, 18 * 60 + 30, 19 * 60, 19 * 60 + 15, 19 * 60 + 45, 20 * 60,
+            20 * 60 + 10, 20 * 60 + 30, 20 * 60 + 50, 21 * 60, 21 * 60 + 20,
+            21 * 60 + 40, 22 * 60, 22 * 60 + 15, 22 * 60 + 45, 23 * 60,
+            23 * 60 + 30, 24 * 60, 24 * 60 + 30, 25 * 60
+        ]
+        let now = Date()
+        return zip(ids, names).enumerated().map { index, pair in
+            TimeTrialParticipant(
+                id: pair.0,
+                name: pair.1,
+                rank: "Rank B",
+                joinedAt: now,
+                submittedTimeSeconds: sampleTimes[index],
+                submittedAt: sampleTimes[index] != nil ? now : nil
+            )
+        }
     }
     
     func stopListening() {
