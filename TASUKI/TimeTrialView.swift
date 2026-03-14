@@ -529,11 +529,6 @@ extension Double {
     }
 }
 
-// 文字列を Identifiable に（navigationDestination(item:) 用）
-extension String: @retroactive Identifiable {
-    public var id: String { self }
-}
-
 #if DEBUG
 #Preview("タイムトライアル エントリ") {
     TimeTrialEntryView()
