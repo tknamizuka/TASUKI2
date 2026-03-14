@@ -19,7 +19,6 @@ struct HomeView: View {
     
     @State private var showRunHistory = false
     @State private var showPracticeCalendar = false
-    @State private var showTimeTrial = false
     @EnvironmentObject private var unreadProvider: UnreadCountProviderBase
     @EnvironmentObject private var joinedPracticesStore: JoinedPracticesStore
     
@@ -132,26 +131,6 @@ struct HomeView: View {
             .sheet(isPresented: $showPracticeCalendar) {
                 PracticeScheduleCalendarView(store: joinedPracticesStore)
             }
-            .sheet(isPresented: $showTimeTrial) {
-                TimeTrialEntryView()
-            }
-            
-            // タイムトライアル（5〜15km・同ランク20名・1週間1回でタイム競争・ポイント）
-            Button(action: { showTimeTrial = true }) {
-                HStack(spacing: 8) {
-                    Image(systemName: "stopwatch.fill")
-                        .font(.system(size: 18))
-                    Text("タイムトライアル")
-                        .font(.headline)
-                        .fontWeight(.semibold)
-                }
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .background(Color(hex: "2E5CFF"))
-                .cornerRadius(12)
-            }
-            .padding(.horizontal, 24)
             
             Spacer()
             

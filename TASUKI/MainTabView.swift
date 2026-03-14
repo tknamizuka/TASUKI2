@@ -4,60 +4,69 @@ struct MainTabView: View {
     @State private var selectedTab: Int = 0
     @EnvironmentObject private var unreadProvider: UnreadCountProviderBase
     
+    private let tabItems: [(icon: String, label: String)] = [
+        ("house.fill", "Home"),
+        ("magnifyingglass", "Find"),
+        ("stopwatch.fill", "Time"),
+        ("person.3.fill", "EKIDEN"),
+        ("graduationcap.fill", "Coach"),
+        ("person.fill", "Me")
+    ]
+    
     var body: some View {
-        TabView(selection: $selectedTab) {
-            // タブ1: Home（メッセージへのリンク・未読バッジ用に NavigationStack でラップ）
-            NavigationStack {
-                HomeView()
-                    .environmentObject(unreadProvider)
+        Group {
+            switch selectedTab {
+            case 0:
+                NavigationStack {
+                    HomeView()
+                        .environmentObject(unreadProvider)
+                }
+            case 1:
+                FindView()
+            case 2:
+                TimeTrialEntryView()
+            case 3:
+                TeamView()
+            case 4:
+                CoachView()
+            case 5:
+                MyProfileView()
+            default:
+                NavigationStack { HomeView().environmentObject(unreadProvider) }
             }
-            .tabItem {
-                Image(systemName: "house.fill")
-                Text("Home")
-            }
-            .tag(0)
-            
-            // タブ2: Find
-            FindView()
-                .tabItem {
-                    Image(systemName: "magnifyingglass")
-                    Text("Find")
-                }
-                .tag(1)
-            
-            // タブ3: タイムトライアル（TimeTrialEntryView が内部で NavigationStack を持つ）
-            TimeTrialEntryView()
-                .tabItem {
-                Image(systemName: "stopwatch.fill")
-                Text("タイムトライアル")
-            }
-            .tag(2)
-            
-            // タブ4: EKIDEN
-            TeamView()
-                .tabItem {
-                    Image(systemName: "person.3.fill")
-                    Text("EKIDEN")
-                }
-                .tag(3)
-            
-            // タブ5: Coach
-            CoachView()
-                .tabItem {
-                    Image(systemName: "graduationcap.fill")
-                    Text("Coach")
-                }
-                .tag(4)
-            
-            // タブ6: Me
-            MyProfileView()
-                .tabItem {
-                    Image(systemName: "person.fill")
-                    Text("Me")
-                }
-                .tag(5)
         }
-        .tint(Color(hex: "0F1A2E"))
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            customTabBar
+        }
+        .ignoresSafeArea(.keyboard)
+    }
+    
+    private var customTabBar: some View {
+        HStack(spacing: 0) {
+            ForEach(0..<tabItems.count, id: \.self) { index in
+                Button(action: { selectedTab = index }) {
+                    VStack(spacing: 2) {
+                        Image(systemName: tabItems[index].icon)
+                            .font(.system(size: 20))
+                        Text(tabItems[index].label)
+                            .font(.system(size: 9))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .foregroundColor(selectedTab == index ? Color(hex: "0F1A2E") : .gray)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.vertical, 6)
+        .background(Color.white)
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(Color.gray.opacity(0.2))
+                .frame(height: 0.5)
+        }
     }
 }
 
