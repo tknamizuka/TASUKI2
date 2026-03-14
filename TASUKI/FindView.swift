@@ -322,8 +322,6 @@ struct FindView: View {
     
     // User型のマッチング用データ（Models.swiftのmockUsersを使用）
     @State private var matchingUsers: [User] = []
-    /// Runnersモード: まだ検索 / フィルターを一度も実行していないかどうか
-    @State private var hasRunnerSearch: Bool = false
     
     // フィルタリング＆ソートされたユーザーリスト
     private var filteredUsers: [User] {
@@ -352,7 +350,7 @@ struct FindView: View {
             }
         }
         
-        // ソート機能
+        // ソート機能（おすすめ＝matchRate 高い順）
         switch sortOption {
         case .recommend:
             filtered = filtered.sorted { $0.matchRate > $1.matchRate }
@@ -606,7 +604,6 @@ struct FindView: View {
                                 .onTapGesture {
                                     // 検索窓タップで詳細フィルターを開く（Runners / Practices 共通）
                                     showFilterSheet = true
-                                    hasRunnerSearch = true
                                 }
                         }
                         .background(
@@ -668,14 +665,12 @@ struct FindView: View {
                     ScrollView {
                         LazyVStack(spacing: 12) {
                             if selectedMode == "Runners" {
-                                // Runnersモード: 検索 / フィルター実行前は何も表示しない
-                                if hasRunnerSearch {
-                                    ForEach(filteredUsers) { user in
-                                        NavigationLink(destination: UserProfileDetailView(user: user)) {
-                                            runnerCardView(user: user)
-                                        }
-                                        .buttonStyle(.plain)
+                                // Runnersモード: 自分のプロフィールに近い同性のユーザー（サンプル）をおすすめ順で表示
+                                ForEach(filteredUsers) { user in
+                                    NavigationLink(destination: UserProfileDetailView(user: user)) {
+                                        runnerCardView(user: user)
                                     }
+                                    .buttonStyle(.plain)
                                 }
                             } else {
                                 // Practicesモード: 募集リスト（掲示板 + 詳細画面への遷移）
@@ -750,7 +745,6 @@ struct FindView: View {
                     practiceCapacity: $practiceFilterCapacity,
                     practiceStartTime: $practiceFilterStartTime,
                     onApply: {
-                        hasRunnerSearch = true
                         showFilterSheet = false
                     },
                     onClear: {
@@ -773,11 +767,6 @@ struct FindView: View {
                         practiceFilterStartTime = "指定なし"
                     }
                 )
-            }
-            .onChange(of: searchText) { newValue in
-                if !newValue.trimmingCharacters(in: .whitespaces).isEmpty {
-                    hasRunnerSearch = true
-                }
             }
             .onAppear {
                 // User型のマッチング用データを初期化（Models.swiftのmockUsersを使用）
