@@ -227,6 +227,11 @@ final class TimeTrialManager: ObservableObject {
                         points: TimeTrialPoints.points(forRank: index + 1)
                     )
                 }
+                // ランク昇格判定（実戦タイムトライアルのみ）
+                RankPromotionManager.shared.evaluateTimeTrialPromotion(
+                    entries: entries,
+                    myUserId: self.currentUserId
+                )
                 completion(.success(entries))
             }
         }

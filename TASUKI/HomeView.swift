@@ -221,6 +221,8 @@ struct HomeView: View {
                 case .success(let km):
                     currentDistance = km
                     healthKitError = nil
+                    // 距離ベースのランク昇格判定
+                    RankPromotionManager.shared.evaluateMonthlyDistancePromotion(monthlyKm: km)
                 case .failure(let err):
                     healthKitError = err.localizedDescription
                 }
