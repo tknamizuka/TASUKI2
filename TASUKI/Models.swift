@@ -111,6 +111,10 @@ struct User: Identifiable, Codable {
     var monthlyTarget: Double   // 月間目標 (km)
     var avgPace: String         // 平均ペース
     
+    // ▼ TASUKIポイント
+    var totalPoints: Int        // 累計ポイント
+    var monthlyPoints: Int      // 月間ポイント
+    
     // ▼ マッチング・位置情報
     var matchRate: Int        // マッチ度 (0-100)
     var lastLogin: Date       // 最終ログイン
@@ -251,6 +255,8 @@ struct PartnerUser: Identifiable {
             monthlyDistance: 0.0,
             monthlyTarget: 0.0,
             avgPace: self.easyPace,
+            totalPoints: 0,
+            monthlyPoints: 0,
             matchRate: 0,
             lastLogin: Date(),
             spotName: self.prefecture,
@@ -345,6 +351,8 @@ let mockUser = User(
     monthlyDistance: 120.0,
     monthlyTarget: 200.0,
     avgPace: "4:45 /km",
+    totalPoints: 12500,
+    monthlyPoints: 1800,
     matchRate: 100,
     lastLogin: Date(),
     spotName: "皇居",
@@ -375,6 +383,8 @@ let mockUsers: [User] = [
         monthlyDistance: 60.0,
         monthlyTarget: 100.0,
         avgPace: "6:15 /km",
+        totalPoints: 3200,
+        monthlyPoints: 400,
         matchRate: 98,
         lastLogin: Date(),
         spotName: "代々木公園",
@@ -403,6 +413,8 @@ let mockUsers: [User] = [
         monthlyDistance: 350.0,
         monthlyTarget: 400.0,
         avgPace: "3:55 /km",
+        totalPoints: 42000,
+        monthlyPoints: 5200,
         matchRate: 85,
         lastLogin: Date().addingTimeInterval(-86400),
         spotName: "駒沢公園",
@@ -609,6 +621,8 @@ struct TeamMessage: Identifiable {
             monthlyDistance: 0.0,
             monthlyTarget: 0.0,
             avgPace: user.easyPace,
+            totalPoints: 0,
+            monthlyPoints: 0,
             matchRate: 0,
             lastLogin: Date(),
             spotName: user.prefecture,
