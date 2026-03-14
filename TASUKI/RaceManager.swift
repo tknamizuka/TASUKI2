@@ -24,7 +24,15 @@ final class RaceManager: ObservableObject {
     
     private init() {}
     
-    var currentUserId: String? { Auth.auth().currentUser?.uid }
+    /// ログイン中は Firebase UID、未ログインでサンプルレースのときは "sample_user"
+    var currentUserId: String? {
+        if let uid = Auth.auth().currentUser?.uid { return uid }
+        if currentRace?.id.hasPrefix("sample_") == true { return "sample_user" }
+        return nil
+    }
+    
+    private static let sampleRaceIdPrefix = "sample_"
+    private func isSampleRace(_ raceId: String) -> Bool { raceId.hasPrefix(Self.sampleRaceIdPrefix) }
     
     // MARK: - Create / Join
     
@@ -93,6 +101,12 @@ final class RaceManager: ObservableObject {
     
     /// マッチング: 待機中のレースがあれば参加、なければ作成
     func matchOrCreate(category: LiveRaceCategory, userName: String, userRank: String?, completion: @escaping (Result<String, Error>) -> Void) {
+        if Auth.auth().currentUser == nil {
+            // モック: 未ログインでもエントリ以降に進める
+            let sampleId = "sample_\(category.rawValue)"
+            completion(.success(sampleId))
+            return
+        }
         findWaitingRace(category: category) { [weak self] result in
             switch result {
             case .failure(let e):
@@ -116,6 +130,16 @@ final class RaceManager: ObservableObject {
     
     /// レースをスタート（カウントダウン後に startTime を設定）
     func startRace(raceId: String, countdownSeconds: Int = 5, completion: @escaping (Result<Void, Error>) -> Void) {
+        if isSampleRace(raceId), var race = currentRace, race.id == raceId {
+            let startTime = Date().addingTimeInterval(TimeInterval(countdownSeconds))
+            race.status = .starting
+            race.startTime = startTime
+            DispatchQueue.main.async { [weak self] in
+                self?.currentRace = race
+                completion(.success(()))
+            }
+            return
+        }
         let startTime = Date().addingTimeInterval(TimeInterval(countdownSeconds))
         db.collection("races").document(raceId).updateData([
             "status": RaceStatus.starting.rawValue,
@@ -132,6 +156,11 @@ final class RaceManager: ObservableObject {
     /// startTime を過ぎていたら status を running に更新（どれか1クライアントが呼ぶ）
     func ensureRaceRunning(raceId: String, startTime: Date?) {
         guard let start = startTime, Date() >= start else { return }
+        if isSampleRace(raceId), var race = currentRace, race.id == raceId, race.status == .starting {
+            race.status = .running
+            DispatchQueue.main.async { [weak self] in self?.currentRace = race }
+            return
+        }
         db.collection("races").document(raceId).getDocument { [weak self] snapshot, _ in
             guard let data = snapshot?.data(),
                   (data["status"] as? String) == RaceStatus.starting.rawValue else { return }
@@ -186,8 +215,53 @@ final class RaceManager: ObservableObject {
     
     /// レース監視を開始（race + participants）
     func startListening(raceId: String) {
+        if isSampleRace(raceId) {
+            raceListener?.remove()
+            participantsListener?.remove()
+            raceListener = nil
+            participantsListener = nil
+            // 既に同じサンプルレースの状態があれば上書きしない（ゴール記録を保持）
+            if currentRace?.id == raceId {
+                return
+            }
+            let race = makeSampleRace(raceId: raceId)
+            let list = makeSampleParticipants()
+            DispatchQueue.main.async { [weak self] in
+                self?.currentRace = race
+                self?.participants = list
+            }
+            return
+        }
         listenToRace(raceId: raceId)
         listenToParticipants(raceId: raceId)
+    }
+    
+    private func makeSampleRace(raceId: String) -> Race {
+        let (category, targetKm): (String, Double) = {
+            if raceId == "sample_5k" { return ("5k", 5.0) }
+            if raceId == "sample_10k" { return ("10k", 10.0) }
+            if raceId == "sample_half" { return ("half", 21.0975) }
+            return ("5k", 5.0)
+        }()
+        return Race(
+            id: raceId,
+            distanceCategory: category,
+            targetDistanceKm: targetKm,
+            status: .waiting,
+            startTime: nil,
+            createdAt: Date(),
+            hostUserId: "sample_user"
+        )
+    }
+    
+    private func makeSampleParticipants() -> [RaceParticipant] {
+        let now = Date()
+        return [
+            RaceParticipant(id: "sample_user", name: "あなた", rank: "Rank B", currentDistanceKm: 0, finishTimeSeconds: nil, joinedAt: now),
+            RaceParticipant(id: "p1", name: "ランナー1", rank: "Rank A", currentDistanceKm: 0, finishTimeSeconds: nil, joinedAt: now),
+            RaceParticipant(id: "p2", name: "ランナー2", rank: "Rank B", currentDistanceKm: 0, finishTimeSeconds: nil, joinedAt: now),
+            RaceParticipant(id: "p3", name: "ランナー3", rank: "Rank C", currentDistanceKm: 0, finishTimeSeconds: nil, joinedAt: now)
+        ]
     }
     
     func stopListening() {
@@ -205,6 +279,12 @@ final class RaceManager: ObservableObject {
     
     /// 現在の走行距離を更新（定期的に呼ぶ）
     func updateMyDistance(raceId: String, distanceKm: Double) {
+        if isSampleRace(raceId), let idx = participants.firstIndex(where: { $0.id == currentUserId }) {
+            var p = participants[idx]
+            p.currentDistanceKm = distanceKm
+            participants[idx] = p
+            return
+        }
         guard let uid = currentUserId else { return }
         db.collection("races").document(raceId).collection("participants").document(uid)
             .updateData(["currentDistanceKm": distanceKm]) { _ in }
@@ -212,6 +292,13 @@ final class RaceManager: ObservableObject {
     
     /// ゴールを記録（経過秒数を送信）
     func submitFinish(raceId: String, finishTimeSeconds: Double, completion: @escaping (Result<Void, Error>) -> Void) {
+        if isSampleRace(raceId), let idx = participants.firstIndex(where: { $0.id == currentUserId }) {
+            var p = participants[idx]
+            p.finishTimeSeconds = finishTimeSeconds
+            participants[idx] = p
+            DispatchQueue.main.async { completion(.success(())) }
+            return
+        }
         guard let uid = currentUserId else {
             completion(.failure(NSError(domain: "RaceManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "未ログイン"])))
             return
@@ -228,6 +315,14 @@ final class RaceManager: ObservableObject {
     
     /// レースを終了状態にする（全員ゴール後や制限時間でホストが呼ぶ）
     func finishRace(raceId: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        if isSampleRace(raceId), var race = currentRace, race.id == raceId {
+            race.status = .finished
+            DispatchQueue.main.async { [weak self] in
+                self?.currentRace = race
+                completion(.success(()))
+            }
+            return
+        }
         db.collection("races").document(raceId).updateData([
             "status": RaceStatus.finished.rawValue
         ]) { error in
