@@ -37,9 +37,6 @@ struct FindView: View {
     // ソート機能
     @State private var sortOption: SortOption = .recommend
     
-    // Runnersモード内のサブ選択（Real / Virtual）
-    @State private var selectedConnectionStyle: ConnectionStyle = .real
-    
     // フィルター用のState
     @State private var selectedRunnerFilter: String = "すべて"
     @State private var selectedPracticeFilter: String = "すべて" // 旧ロジック互換用（UI表示のみ）
@@ -325,6 +322,8 @@ struct FindView: View {
     
     // User型のマッチング用データ（Models.swiftのmockUsersを使用）
     @State private var matchingUsers: [User] = []
+    /// Runnersモード: まだ検索 / フィルターを一度も実行していないかどうか
+    @State private var hasRunnerSearch: Bool = false
     
     // フィルタリング＆ソートされたユーザーリスト
     private var filteredUsers: [User] {
@@ -333,9 +332,23 @@ struct FindView: View {
         // 検索テキストフィルター
         if !searchText.isEmpty {
             filtered = filtered.filter { user in
-                user.name.localizedCaseInsensitiveContains(searchText) ||
-                user.bio.localizedCaseInsensitiveContains(searchText) ||
-                user.spotName.localizedCaseInsensitiveContains(searchText)
+                let q = searchText
+                // ユーザーのID（UUID文字列）
+                let idString = user.id.uuidString
+                return
+                    idString.localizedCaseInsensitiveContains(q) ||          // 固有ID
+                    user.name.localizedCaseInsensitiveContains(q) ||         // ニックネーム
+                    user.spotName.localizedCaseInsensitiveContains(q) ||     // よく走るエリア（表示用スポット）
+                    user.area.localizedCaseInsensitiveContains(q) ||         // 活動エリア
+                    user.prefecture.localizedCaseInsensitiveContains(q) ||   // 都道府県
+                    user.purpose.localizedCaseInsensitiveContains(q) ||      // ランニングの目的
+                    user.schedule.localizedCaseInsensitiveContains(q) ||     // よく走る日時
+                    user.runningFrequency.localizedCaseInsensitiveContains(q) || // 頻度
+                    user.personalBest.localizedCaseInsensitiveContains(q) || // 自己ベスト
+                    user.nextRace.localizedCaseInsensitiveContains(q) ||     // 次のレース
+                    user.targetTime.localizedCaseInsensitiveContains(q) ||   // 目標タイム
+                    user.avgPace.localizedCaseInsensitiveContains(q) ||      // 平均ペース
+                    user.bio.localizedCaseInsensitiveContains(q)             // 自己紹介・タグ的テキスト
             }
         }
         
@@ -355,16 +368,6 @@ struct FindView: View {
     // 既存のPartnerUser用のフィルタリング（Practicesモード用に保持）
     private var filteredPartnerUsers: [PartnerUser] {
         var filtered = partnerMockUsers
-        
-        // マッチングスタイルフィルター（Real / Virtual）
-        filtered = filtered.filter { user in
-            // .bothのユーザーはどちらでも表示
-            if user.connectionStyle == .both {
-                return true
-            }
-            // 選択されたスタイルと一致するユーザーのみ表示
-            return user.connectionStyle == selectedConnectionStyle
-        }
         
         // ランクフィルター
         if selectedRunnerFilter != "すべて" {
@@ -588,17 +591,7 @@ struct FindView: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
                     
-                    // 2. サブモード切り替え（Runners選択時のみ表示）
-                    if selectedMode == "Runners" {
-                        Picker("Connection Style", selection: $selectedConnectionStyle) {
-                            Text("リアル (対面)").tag(ConnectionStyle.real)
-                            Text("バーチャル (オンライン)").tag(ConnectionStyle.virtual)
-                        }
-                        .pickerStyle(.segmented)
-                        .padding(.horizontal, 16)
-                    }
-                    
-                    // 3. 検索バーエリア
+                    // 2. 検索バーエリア
                     HStack(spacing: 12) {
                         HStack {
                             Image(systemName: "magnifyingglass")
@@ -610,13 +603,18 @@ struct FindView: View {
                                 .foregroundColor(Color(hex: "0F1A2E"))
                                 .padding(.vertical, 12)
                                 .padding(.trailing, 12)
+                                .onTapGesture {
+                                    // 検索窓タップで詳細フィルターを開く（Runners / Practices 共通）
+                                    showFilterSheet = true
+                                    hasRunnerSearch = true
+                                }
                         }
                         .background(
                             RoundedRectangle(cornerRadius: 12)
                                 .fill(Color(hex: "F5F7FA"))
                         )
                         
-                        // 詳細フィルターボタン
+                        // 詳細フィルターボタン（アイコンからも開ける）
                         Button(action: {
                             showFilterSheet = true
                         }) {
@@ -670,12 +668,14 @@ struct FindView: View {
                     ScrollView {
                         LazyVStack(spacing: 12) {
                             if selectedMode == "Runners" {
-                                // Runnersモード: ユーザーリスト
-                                ForEach(filteredUsers) { user in
-                                    NavigationLink(destination: UserProfileDetailView(user: user)) {
-                                        runnerCardView(user: user)
+                                // Runnersモード: 検索 / フィルター実行前は何も表示しない
+                                if hasRunnerSearch {
+                                    ForEach(filteredUsers) { user in
+                                        NavigationLink(destination: UserProfileDetailView(user: user)) {
+                                            runnerCardView(user: user)
+                                        }
+                                        .buttonStyle(.plain)
                                     }
-                                    .buttonStyle(.plain)
                                 }
                             } else {
                                 // Practicesモード: 募集リスト（掲示板 + 詳細画面への遷移）
@@ -750,6 +750,7 @@ struct FindView: View {
                     practiceCapacity: $practiceFilterCapacity,
                     practiceStartTime: $practiceFilterStartTime,
                     onApply: {
+                        hasRunnerSearch = true
                         showFilterSheet = false
                     },
                     onClear: {
@@ -772,6 +773,11 @@ struct FindView: View {
                         practiceFilterStartTime = "指定なし"
                     }
                 )
+            }
+            .onChange(of: searchText) { newValue in
+                if !newValue.trimmingCharacters(in: .whitespaces).isEmpty {
+                    hasRunnerSearch = true
+                }
             }
             .onAppear {
                 // User型のマッチング用データを初期化（Models.swiftのmockUsersを使用）
@@ -1598,7 +1604,15 @@ struct FilterDetailSheet: View {
             .navigationTitle("詳細フィルター")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                // 左上: 閉じる
                 ToolbarItem(placement: .navigationBarLeading) {
+                    Button("閉じる") {
+                        dismiss()
+                    }
+                    .foregroundColor(Color(hex: "0F1A2E"))
+                }
+                // 右上: 条件をクリア
+                ToolbarItem(placement: .navigationBarTrailing) {
                     Button("条件をクリア") {
                         onClear()
                         localRunSpot = ""
@@ -1608,17 +1622,26 @@ struct FilterDetailSheet: View {
                         practiceCapacity = "指定なし"
                         practiceStartTime = "指定なし"
                     }
-                    .foregroundColor(Color(hex: "0F1A2E"))
-                }
-                
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("この条件で検索") {
-                        onApply()
-                        dismiss()
-                    }
                     .foregroundColor(Color(hex: "2E5CFF"))
-                    .fontWeight(.semibold)
                 }
+            }
+            // 下部固定の「この条件で検索」ボタン
+            .safeAreaInset(edge: .bottom) {
+                Button(action: {
+                    onApply()
+                    dismiss()
+                }) {
+                    Text("この条件で検索")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color(hex: "2E5CFF"))
+                        .cornerRadius(12)
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 8)
+                }
+                .background(Color.white.opacity(0.9))
             }
             .onAppear {
                 localRunSpot = runSpot
