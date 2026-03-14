@@ -895,15 +895,26 @@ struct FindView: View {
             
             // 情報詳細
             VStack(alignment: .leading, spacing: 6) {
-                // 名前 + オンラインステータス + ポイントバッジ
+                // 名前 + ポイントバッジ + オンラインステータス
                 HStack(spacing: 6) {
                     Text(user.name)
                         .font(.system(size: 17, weight: .bold))
                         .foregroundColor(Color(hex: "0F1A2E"))
                     if let tier = PointBadgeHelper.tier(forTotalPoints: user.totalPoints) {
-                        Image(systemName: tier.iconName)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(tier.color)
+                        HStack(spacing: 3) {
+                            Image(systemName: tier.iconName)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(tier.color)
+                            Text(tier.displayName)
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(Color(hex: "0F1A2E"))
+                        }
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(tier.color.opacity(0.12))
+                        )
                     }
                     if user.isOnline {
                         Circle()

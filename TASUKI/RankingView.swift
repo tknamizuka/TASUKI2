@@ -140,6 +140,22 @@ struct RankingView: View {
                         Text(user.name)
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(Color(hex: "0F1A2E"))
+                        if let tier = PointBadgeHelper.tier(forTotalPoints: user.totalPoints) {
+                            HStack(spacing: 3) {
+                                Image(systemName: tier.iconName)
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(tier.color)
+                                Text(tier.displayName)
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundColor(Color(hex: "0F1A2E"))
+                            }
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(tier.color.opacity(0.12))
+                            )
+                        }
                         Text(user.rank)
                             .font(.system(size: 11, weight: .semibold))
                             .padding(.horizontal, 6)
@@ -148,11 +164,6 @@ struct RankingView: View {
                                 RoundedRectangle(cornerRadius: 6)
                                     .fill(Color(hex: "0F1A2E").opacity(0.06))
                             )
-                        if let tier = PointBadgeHelper.tier(forTotalPoints: user.totalPoints) {
-                            Image(systemName: tier.iconName)
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundColor(tier.color)
-                        }
                     }
                     Text(user.prefecture)
                         .font(.system(size: 12))

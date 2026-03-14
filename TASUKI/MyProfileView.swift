@@ -63,32 +63,37 @@ struct MyProfileView: View {
                             
                             // 名前、改行してランク・UUID（各々別行、コピー付き）
                             VStack(spacing: 8) {
-                                // 名前（1行目、中央揃え）
-                                Text(name)
-                                    .font(.system(size: 28, weight: .bold))
-                                    .foregroundColor(Color(hex: "0F1A2E"))
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.8)
-                                    .frame(maxWidth: .infinity, alignment: .center)
+                                // 名前 + ポイントバッジ（1行目、中央揃え）
+                                HStack(spacing: 8) {
+                                    Text(name)
+                                        .font(.system(size: 28, weight: .bold))
+                                        .foregroundColor(Color(hex: "0F1A2E"))
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.8)
+                                    if let tier = myBadgeTier {
+                                        HStack(spacing: 4) {
+                                            Image(systemName: tier.iconName)
+                                                .font(.system(size: 14, weight: .semibold))
+                                                .foregroundColor(tier.color)
+                                            Text(tier.displayName)
+                                                .font(.system(size: 13, weight: .semibold))
+                                                .foregroundColor(Color(hex: "0F1A2E"))
+                                        }
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .fill(Color(hex: "0F1A2E").opacity(0.06))
+                                        )
+                                    }
+                                }
+                                .frame(maxWidth: .infinity, alignment: .center)
 
                                 // ランク（2行目、中央揃え）
                                 Text(rank)
                                     .font(.system(size: 16, weight: .semibold))
                                     .foregroundColor(Color.royalBlue)
                                     .frame(maxWidth: .infinity, alignment: .center)
-
-                                // ポイントバッジ（累計ポイントに応じて表示）
-                                if let tier = myBadgeTier {
-                                    HStack(spacing: 6) {
-                                        Image(systemName: tier.iconName)
-                                            .font(.system(size: 14, weight: .semibold))
-                                            .foregroundColor(tier.color)
-                                        Text(tier.displayName)
-                                            .font(.system(size: 13, weight: .semibold))
-                                            .foregroundColor(Color(hex: "0F1A2E"))
-                                    }
-                                    .frame(maxWidth: .infinity, alignment: .center)
-                                }
 
                                 // UUID（3行目、中央揃え） + コピー
                                 HStack(spacing: 8) {

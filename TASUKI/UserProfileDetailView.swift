@@ -35,10 +35,29 @@ struct UserProfileDetailView: View {
                             .frame(width: 120, height: 120)
                     }
                     
-                    // 名前
-                    Text(user.name)
-                        .font(.system(size: 28, weight: .bold))
-                        .foregroundColor(Color(hex: "0F1A2E"))
+                    // 名前 + ポイントバッジ
+                    HStack(spacing: 8) {
+                        Text(user.name)
+                            .font(.system(size: 28, weight: .bold))
+                            .foregroundColor(Color(hex: "0F1A2E"))
+                        if let tier = PointBadgeHelper.tier(forTotalPoints: user.totalPoints) {
+                            HStack(spacing: 4) {
+                                Image(systemName: tier.iconName)
+                                    .font(.caption)
+                                    .foregroundColor(tier.color)
+                                Text(tier.displayName)
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(Color(hex: "0F1A2E"))
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(Color(hex: "0F1A2E").opacity(0.06))
+                            )
+                        }
+                    }
                     
                     // 年齢・性別
                     Text("\(user.age)歳 / \(user.gender)")
@@ -77,25 +96,6 @@ struct UserProfileDetailView: View {
                                 RoundedRectangle(cornerRadius: 12)
                                     .fill(Color(hex: "0F1A2E"))
                             )
-                        
-                        // ポイントバッジ（累計ポイントに応じて表示）
-                        if let tier = PointBadgeHelper.tier(forTotalPoints: user.totalPoints) {
-                            HStack(spacing: 4) {
-                                Image(systemName: tier.iconName)
-                                    .font(.caption)
-                                    .foregroundColor(tier.color)
-                                Text(tier.displayName)
-                                    .font(.caption)
-                                    .fontWeight(.semibold)
-                                    .foregroundColor(Color(hex: "0F1A2E"))
-                            }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(Color(hex: "0F1A2E").opacity(0.06))
-                            )
-                        }
                         
                         // Purposeタグ
                         Text(user.purpose)
