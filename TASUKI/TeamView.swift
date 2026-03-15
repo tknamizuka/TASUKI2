@@ -185,32 +185,25 @@ struct TeamView: View {
                                     )
                                 }
                                 .padding(.horizontal, 20)
+                                .padding(.bottom, 20)
                             }
-                            
-                            Button(action: {
-                                showTeamChatSheet = true
-                            }) {
-                                HStack {
-                                    Spacer()
-                                    Text("Team Chat")
-                                        .font(.system(size: 16, weight: .semibold))
-                                        .foregroundColor(.white)
-                                    Spacer()
-                                }
-                                .frame(height: 50)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color(hex: "2E5CFF"))
-                                )
-                            }
-                            .padding(.horizontal, 20)
-                            .padding(.bottom, 20)
                         }
                     }
                     
                     NavigationLink(destination: TeamDetailView(teamId: selectedTeamId), isActive: $showTeamDetail) {
                         EmptyView()
                     }
+                }
+                .overlay(alignment: .topTrailing) {
+                    Button(action: { showTeamChatSheet = true }) {
+                        Image(systemName: "message.fill")
+                            .font(.system(size: 22))
+                            .foregroundColor(.white)
+                            .frame(width: 56, height: 56)
+                            .background(Circle().fill(Color(hex: "2E5CFF")))
+                    }
+                    .padding(.top, 8)
+                    .padding(.trailing, 20)
                 }
                 .navigationTitle("EKIDEN MODE")
                 .navigationBarTitleDisplayMode(.large)
