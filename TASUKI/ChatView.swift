@@ -16,13 +16,16 @@ struct ChatMessage: Identifiable {
     let timestamp: Date
     /// 返信先メッセージのID（同一会話内）。nil の場合は通常メッセージ
     let replyToMessageId: String?
+    /// 送信者名（練習会など複数参加者チャットで「誰が送ったか」を表示する用。nil の場合は表示しない）
+    let senderName: String?
     
-    init(id: String? = nil, text: String, isFromMe: Bool, timestamp: Date = Date(), replyToMessageId: String? = nil) {
+    init(id: String? = nil, text: String, isFromMe: Bool, timestamp: Date = Date(), replyToMessageId: String? = nil, senderName: String? = nil) {
         self.id = id ?? UUID().uuidString
         self.text = text
         self.isFromMe = isFromMe
         self.timestamp = timestamp
         self.replyToMessageId = replyToMessageId
+        self.senderName = senderName
     }
 }
 
@@ -31,15 +34,19 @@ struct ChatView: View {
     /// バックエンドで発行された一意の会話ID（このチャットルームの識別子）
     let conversationId: String
     let partnerName: String
+    /// 練習会チャットかどうか（true のときメッセージに送信者名を表示）
+    var isPractice: Bool = false
     @Environment(\.dismiss) var dismiss
     
     @State private var messages: [ChatMessage] = []
     @State private var messageText: String = ""
     @FocusState private var isTextFieldFocused: Bool
+    @AppStorage("myName") private var myName: String = "Hiro"
     
-    init(conversationId: String = "dummy-preview", partnerName: String = "Tanaka-san") {
+    init(conversationId: String = "dummy-preview", partnerName: String = "Tanaka-san", isPractice: Bool = false) {
         self.conversationId = conversationId
         self.partnerName = partnerName
+        self.isPractice = isPractice
     }
     
     var body: some View {
@@ -113,6 +120,12 @@ struct ChatView: View {
             }
             
             VStack(alignment: message.isFromMe ? .trailing : .leading, spacing: 4) {
+                // 送信者名（練習会などで表示）
+                if let name = message.senderName, !name.isEmpty {
+                    Text(name)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(Color(hex: "0F1A2E").opacity(0.7))
+                }
                 if let replyId = message.replyToMessageId,
                    let repliedTo = messages.first(where: { $0.id == replyId }) {
                     Text("返信: \(repliedTo.text)")
@@ -176,7 +189,12 @@ struct ChatView: View {
             return
         }
         
-        let newMessage = ChatMessage(text: messageText, isFromMe: true, replyToMessageId: replyToMessageId)
+        let newMessage = ChatMessage(
+            text: messageText,
+            isFromMe: true,
+            replyToMessageId: replyToMessageId,
+            senderName: isPractice ? myName : nil
+        )
         messages.append(newMessage)
         messageText = ""
         isTextFieldFocused = false
@@ -186,7 +204,8 @@ struct ChatView: View {
             let replyMessage = ChatMessage(
                 text: "ありがとうございます！",
                 isFromMe: false,
-                replyToMessageId: nil
+                replyToMessageId: nil,
+                senderName: isPractice ? "Kenji_Run" : nil
             )
             messages.append(replyMessage)
         }
@@ -199,18 +218,29 @@ struct ChatView: View {
         func hourAgo(_ h: Int) -> Date { cal.date(byAdding: .hour, value: -h, to: now) ?? now }
         func dayAgo(_ d: Int) -> Date { cal.date(byAdding: .day, value: -d, to: now) ?? now }
 
-        messages = [
-            ChatMessage(id: "dummy-1", text: "こんにちは！ランニングパートナーを探しています。", isFromMe: false, timestamp: dayAgo(2)),
-            ChatMessage(id: "dummy-2", text: "こんにちは！私も探していました。一緒に走りましょう！", isFromMe: true, timestamp: dayAgo(2)),
-            ChatMessage(id: "dummy-3", text: "ありがとうございます！いつ頃が都合よろしいですか？", isFromMe: false, timestamp: dayAgo(1)),
-            ChatMessage(id: "dummy-4", text: "週末の朝が良いです。6時頃からいかがでしょうか？", isFromMe: true, timestamp: dayAgo(1), replyToMessageId: "dummy-3"),
-            ChatMessage(id: "dummy-5", text: "6時、大丈夫です！どこで待ち合わせましょうか？", isFromMe: false, timestamp: hourAgo(5)),
-            ChatMessage(id: "dummy-6", text: "代々木公園の入口、ベンチの前でどうですか？", isFromMe: true, timestamp: hourAgo(4)),
-            ChatMessage(id: "dummy-7", text: "いいですね！では土曜の朝6時代々木公園で。", isFromMe: false, timestamp: hourAgo(3)),
-            ChatMessage(id: "dummy-8", text: "了解です。当日は軽くストレッチしてから走りましょう。", isFromMe: true, timestamp: hourAgo(2)),
-            ChatMessage(id: "dummy-9", text: "5kmくらいのペースで行きましょうか？", isFromMe: false, timestamp: minAgo(45)),
-            ChatMessage(id: "dummy-10", text: "6分/kmくらいでゆっくりいきましょう！", isFromMe: true, timestamp: minAgo(30)),
-        ]
+        if isPractice {
+            // 練習会チャット用サンプル（送信者名付き）
+            messages = [
+                ChatMessage(id: "dummy-p1", text: "集合は噴水前です。5分前には集まってください！", isFromMe: false, timestamp: hourAgo(2), senderName: "Kenji_Run"),
+                ChatMessage(id: "dummy-p2", text: "了解です！", isFromMe: true, timestamp: hourAgo(2), senderName: myName),
+                ChatMessage(id: "dummy-p3", text: "よろしくお願いします！", isFromMe: false, timestamp: hourAgo(1), senderName: "さっちゃん"),
+                ChatMessage(id: "dummy-p4", text: "ペースは6:30/kmでゆっくり行きましょう。", isFromMe: false, timestamp: minAgo(45), senderName: "Kenji_Run"),
+                ChatMessage(id: "dummy-p5", text: "お願いします！", isFromMe: true, timestamp: minAgo(30), senderName: myName),
+            ]
+        } else {
+            messages = [
+                ChatMessage(id: "dummy-1", text: "こんにちは！ランニングパートナーを探しています。", isFromMe: false, timestamp: dayAgo(2)),
+                ChatMessage(id: "dummy-2", text: "こんにちは！私も探していました。一緒に走りましょう！", isFromMe: true, timestamp: dayAgo(2)),
+                ChatMessage(id: "dummy-3", text: "ありがとうございます！いつ頃が都合よろしいですか？", isFromMe: false, timestamp: dayAgo(1)),
+                ChatMessage(id: "dummy-4", text: "週末の朝が良いです。6時頃からいかがでしょうか？", isFromMe: true, timestamp: dayAgo(1), replyToMessageId: "dummy-3"),
+                ChatMessage(id: "dummy-5", text: "6時、大丈夫です！どこで待ち合わせましょうか？", isFromMe: false, timestamp: hourAgo(5)),
+                ChatMessage(id: "dummy-6", text: "代々木公園の入口、ベンチの前でどうですか？", isFromMe: true, timestamp: hourAgo(4)),
+                ChatMessage(id: "dummy-7", text: "いいですね！では土曜の朝6時代々木公園で。", isFromMe: false, timestamp: hourAgo(3)),
+                ChatMessage(id: "dummy-8", text: "了解です。当日は軽くストレッチしてから走りましょう。", isFromMe: true, timestamp: hourAgo(2)),
+                ChatMessage(id: "dummy-9", text: "5kmくらいのペースで行きましょうか？", isFromMe: false, timestamp: minAgo(45)),
+                ChatMessage(id: "dummy-10", text: "6分/kmくらいでゆっくりいきましょう！", isFromMe: true, timestamp: minAgo(30)),
+            ]
+        }
     }
 }
 

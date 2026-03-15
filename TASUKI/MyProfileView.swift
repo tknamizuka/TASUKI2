@@ -61,30 +61,53 @@ struct MyProfileView: View {
                                         .stroke(Color.royalBlue.opacity(0.3), lineWidth: 3)
                                 )
                             
-                            // 名前、改行してランク・UUID（各々別行、コピー付き）
-                            VStack(spacing: 8) {
-                                // 名前 + バッジ（公認マーク風・名前の直後にアイコン）
-                                HStack(spacing: 6) {
+                            // 名前、バッジ名・ランク、UUID
+                            VStack(spacing: 12) {
+                                // 名前 + カラーのカプセルバッジ
+                                HStack(spacing: 10) {
                                     Text(name)
                                         .font(.system(size: 28, weight: .bold))
                                         .foregroundColor(Color(hex: "0F1A2E"))
                                         .lineLimit(1)
                                         .minimumScaleFactor(0.8)
                                     if let tier = myBadgeTier {
-                                        Image(systemName: tier.iconName)
-                                            .font(.system(size: 16, weight: .semibold))
-                                            .foregroundColor(tier.color)
+                                        HStack(spacing: 5) {
+                                            Image(systemName: tier.iconName)
+                                                .font(.system(size: 12, weight: .semibold))
+                                            Text(tier.displayName)
+                                                .font(.system(size: 13, weight: .semibold))
+                                        }
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
+                                        .background(Capsule().fill(tier.color))
                                     }
                                 }
                                 .frame(maxWidth: .infinity, alignment: .center)
 
-                                // ランク（2行目、中央揃え）
+                                // ランク（カプセル）
                                 Text(rank)
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundColor(Color.royalBlue)
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 8)
+                                    .background(Capsule().fill(Color.royalBlue))
                                     .frame(maxWidth: .infinity, alignment: .center)
 
-                                // UUID（3行目、中央揃え） + コピー
+                                // 保有ポイント（累計）
+                                HStack(spacing: 4) {
+                                    Text("保有ポイント（累計）")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(Color(hex: "0F1A2E").opacity(0.6))
+                                    Text("\(PointService.shared.currentTotalPoints())")
+                                        .font(.system(size: 16, weight: .bold))
+                                        .foregroundColor(Color(hex: "0F1A2E"))
+                                    Text("pt")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundColor(Color(hex: "0F1A2E").opacity(0.6))
+                                }
+
+                                // UUID + コピー
                                 HStack(spacing: 8) {
                                     Spacer(minLength: 0)
                                     Text(userUUID.isEmpty ? "—" : userUUID)

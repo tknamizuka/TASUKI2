@@ -21,8 +21,6 @@ struct HomeView: View {
     @State private var showPracticeCalendar = false
     @EnvironmentObject private var unreadProvider: UnreadCountProviderBase
     @EnvironmentObject private var joinedPracticesStore: JoinedPracticesStore
-    @AppStorage("myTotalPoints") private var myTotalPoints: Int = 0
-    
     init(
         currentDistance: Double = 0.0,
         goalDistance: Double = 100.0,
@@ -135,24 +133,24 @@ struct HomeView: View {
             
             Spacer()
             
-            // 3. 通貨表示 (pt)
+            // 3. 保有ポイント（累計）表示
             VStack(spacing: 5) {
-                Text("TOTAL POINTS")
+                Text("保有ポイント（累計）")
                     .font(.caption)
                     .fontWeight(.bold)
                     .foregroundColor(.gray)
                     .tracking(2)
                 
                 HStack(alignment: .lastTextBaseline, spacing: 5) {
-                    Text("\(myTotalPoints)")
-                        .font(.system(size: 44, weight: .bold)) 
+                    Text("\(PointService.shared.currentTotalPoints())")
+                        .font(.system(size: 44, weight: .bold))
                         .foregroundColor(Color(hex: "0F1A2E"))
                     
-                    Text("pt") // 小文字に変更
-                        .font(.title3) // サイズ調整
+                    Text("pt")
+                        .font(.title3)
                         .fontWeight(.bold)
                         .foregroundColor(.gray)
-                        .padding(.bottom, 4) // ベースライン微調整
+                        .padding(.bottom, 4)
                 }
                 
                 NavigationLink(destination: RankingView()) {

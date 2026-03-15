@@ -63,10 +63,9 @@ struct FindView: View {
     @AppStorage("myAvgPace") private var myAvgPace: String = "5:30/km"
     
     // Practices用 詳細フィルター
-    @State private var practiceFilterDay: String = "指定なし"
+    @State private var practiceFilterDate: Date? = nil  // 日時で絞り込む（nil=指定なし）
     @State private var practiceFilterSpot: String = ""
     @State private var practiceFilterCapacity: String = "指定なし"
-    @State private var practiceFilterStartTime: String = "指定なし"
     
     // Runnersモード用のフィルター項目
     private let runnerFilters = ["すべて", "Rank S", "Rank A", "Rank B", "Rank C", "エリア未設定"]
@@ -519,18 +518,9 @@ struct FindView: View {
             filtered = filtered.filter { $0.category == category }
         }
         
-        // 詳細フィルター（Practices用）
-        if practiceFilterDay != "指定なし" {
-            filtered = filtered.filter { recruitment in
-                switch practiceFilterDay {
-                case "平日":
-                    return ["月", "火", "水", "木", "金"].contains(recruitment.dayOfWeek)
-                case "土日":
-                    return ["土", "日"].contains(recruitment.dayOfWeek)
-                default:
-                    return recruitment.dayOfWeek == practiceFilterDay
-                }
-            }
+        // 詳細フィルター（Practices用）— 日時で絞り込み（一度きりは同日、毎週は曜日一致でヒット）
+        if let filterDate = practiceFilterDate {
+            filtered = filtered.filter { $0.matches(filterDate: filterDate) }
         }
         
         if !practiceFilterSpot.isEmpty {
@@ -546,23 +536,6 @@ struct FindView: View {
                     return recruitment.maxParticipants <= 10
                 case "11名〜":
                     return recruitment.maxParticipants >= 11
-                default:
-                    return true
-                }
-            }
-        }
-        
-        if practiceFilterStartTime != "指定なし" {
-            let calendar = Calendar.current
-            filtered = filtered.filter { recruitment in
-                let hour = calendar.component(.hour, from: recruitment.date)
-                switch practiceFilterStartTime {
-                case "朝 (〜9:00)":
-                    return hour < 9
-                case "昼 (9〜17時)":
-                    return (9..<17).contains(hour)
-                case "夜 (17時〜)":
-                    return hour >= 17
                 default:
                     return true
                 }
@@ -599,37 +572,27 @@ struct FindView: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
                     
-                    // 2. 検索バーエリア
-                    HStack(spacing: 12) {
+                    // 2. 検索バーエリア（タップでフィルターシートを開く。検索窓はシート内にあり）
+                    Button(action: { showFilterSheet = true }) {
                         HStack {
                             Image(systemName: "magnifyingglass")
                                 .foregroundColor(Color(hex: "0F1A2E").opacity(0.5))
                                 .padding(.leading, 12)
                             
-                            TextField("検索...", text: $searchText)
+                            Text(searchText.isEmpty ? "検索..." : searchText)
                                 .font(.system(size: 16))
-                                .foregroundColor(Color(hex: "0F1A2E"))
+                                .foregroundColor(searchText.isEmpty ? Color(hex: "0F1A2E").opacity(0.5) : Color(hex: "0F1A2E"))
+                                .lineLimit(1)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.vertical, 12)
                                 .padding(.trailing, 12)
-                                .onTapGesture {
-                                    // 検索窓タップで詳細フィルターを開く（Runners / Practices 共通）
-                                    showFilterSheet = true
-                                }
                         }
                         .background(
                             RoundedRectangle(cornerRadius: 12)
                                 .fill(Color(hex: "F5F7FA"))
                         )
-                        
-                        // 詳細フィルターボタン（アイコンからも開ける）
-                        Button(action: {
-                            showFilterSheet = true
-                        }) {
-                            Image(systemName: "line.3.horizontal.decrease.circle")
-                                .font(.system(size: 24))
-                                .foregroundColor(Color(hex: "0F1A2E"))
-                        }
                     }
+                    .buttonStyle(.plain)
                     .padding(.horizontal, 16)
                     
                     // 4. クイックフィルター（横スクロール）
@@ -732,6 +695,7 @@ struct FindView: View {
             }
             .sheet(isPresented: $showFilterSheet) {
                 FilterDetailSheet(
+                    searchText: $searchText,
                     selectedMode: selectedMode,
                     prefecture: $filterPrefecture,
                     ageGroup: $filterAgeGroup,
@@ -750,14 +714,14 @@ struct FindView: View {
                     myBestHalf: myBestHalf,
                     myJogPace: myAvgPace.isEmpty ? "5:30/km" : myAvgPace,
                     practiceCategory: $selectedPracticeCategory,
-                    practiceDay: $practiceFilterDay,
+                    practiceFilterDate: $practiceFilterDate,
                     practiceSpot: $practiceFilterSpot,
                     practiceCapacity: $practiceFilterCapacity,
-                    practiceStartTime: $practiceFilterStartTime,
                     onApply: {
                         showFilterSheet = false
                     },
                     onClear: {
+                        searchText = ""
                         filterPrefecture = "指定なし"
                         filterAgeGroup = "指定なし"
                         filterAgeMin = 20
@@ -771,10 +735,9 @@ struct FindView: View {
                         filterEasyPace = "5:30/km"
                         filterRunSpot = ""
                         selectedPracticeCategory = nil
-                        practiceFilterDay = "指定なし"
+                        practiceFilterDate = nil
                         practiceFilterSpot = ""
                         practiceFilterCapacity = "指定なし"
-                        practiceFilterStartTime = "指定なし"
                     }
                 )
             }
@@ -807,7 +770,7 @@ struct FindView: View {
             }
             .sheet(isPresented: $showRecruitmentSheet) {
                 RecruitmentPostSheet(
-                    onPost: { title, date, pace, location, description in
+                    onPost: { title, date, pace, location, description, isRecurring, recurringWeekday in
                         let practiceId = UUID().uuidString
                         let myUser = PartnerUser(
                             name: "Hiro",
@@ -847,7 +810,9 @@ struct FindView: View {
                                 description: description,
                                 applicants: [],
                                 participantUserIds: [],
-                                maxParticipants: 10
+                                maxParticipants: 10,
+                                isRecurring: isRecurring,
+                                recurringWeekday: recurringWeekday
                             )
                             recruitments.insert(newRecruitment, at: 0)
                             showRecruitmentSheet = false
@@ -869,7 +834,9 @@ struct FindView: View {
                                     description: description,
                                     applicants: [],
                                     participantUserIds: [hostUid],
-                                    maxParticipants: 10
+                                    maxParticipants: 10,
+                                    isRecurring: isRecurring,
+                                    recurringWeekday: recurringWeekday
                                 )
                                 recruitments.insert(newRecruitment, at: 0)
                                 showRecruitmentSheet = false
@@ -1162,15 +1129,28 @@ struct FindView: View {
 
 // MARK: - Recruitment Post Sheet
 struct RecruitmentPostSheet: View {
-    let onPost: (String, Date, String, String, String) -> Void
+    /// (title, date, pace, location, description, isRecurring, recurringWeekday)
+    let onPost: (String, Date, String, String, String, Bool, Int?) -> Void
     let onCancel: () -> Void
     
     @State private var title: String = ""
     @State private var selectedDate: Date = Date().addingTimeInterval(86400)
+    @State private var isRecurring: Bool = false
+    @State private var recurringWeekday: Int = 4  // 4 = 水曜（Calendar.weekday）
+    @State private var recurringTime: Date = {
+        var c = Calendar.current.dateComponents([.year, .month, .day], from: Date())
+        c.hour = 7
+        c.minute = 0
+        return Calendar.current.date(from: c) ?? Date()
+    }()
     @State private var pace: String = ""
     @State private var location: String = ""
     @State private var description: String = ""
     @Environment(\.dismiss) var dismiss
+    
+    private let weekdayOptions: [(Int, String)] = [
+        (1, "日"), (2, "月"), (3, "火"), (4, "水"), (5, "木"), (6, "金"), (7, "土")
+    ]
     
     var body: some View {
         NavigationStack {
@@ -1199,20 +1179,47 @@ struct RecruitmentPostSheet: View {
                         .padding(.horizontal, 20)
                         .padding(.top, 20)
                         
-                        // 日時
+                        // 日時（一度だけ / 毎週）
                         VStack(alignment: .leading, spacing: 12) {
                             Text("開催日時")
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(Color(hex: "0F1A2E"))
                             
-                            DatePicker("", selection: $selectedDate, displayedComponents: [.date, .hourAndMinute])
-                                .datePickerStyle(.compact)
+                            Picker("", selection: $isRecurring) {
+                                Text("一度だけ").tag(false)
+                                Text("毎週").tag(true)
+                            }
+                            .pickerStyle(.segmented)
+                            
+                            if isRecurring {
+                                HStack(spacing: 8) {
+                                    Text("曜日")
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundColor(Color(hex: "0F1A2E"))
+                                    Picker("曜日", selection: $recurringWeekday) {
+                                        ForEach(weekdayOptions, id: \.0) { Text($0.1).tag($0.0) }
+                                    }
+                                    .pickerStyle(.menu)
+                                    Spacer()
+                                }
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 12)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color(hex: "F5F7FA"))
-                                )
+                                .background(RoundedRectangle(cornerRadius: 12).fill(Color(hex: "F5F7FA")))
+                                
+                                DatePicker("開始時刻", selection: $recurringTime, displayedComponents: .hourAndMinute)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 12)
+                                    .background(RoundedRectangle(cornerRadius: 12).fill(Color(hex: "F5F7FA")))
+                            } else {
+                                DatePicker("", selection: $selectedDate, displayedComponents: [.date, .hourAndMinute])
+                                    .datePickerStyle(.compact)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 12)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(Color(hex: "F5F7FA"))
+                                    )
+                            }
                         }
                         .padding(.horizontal, 20)
                         
@@ -1288,7 +1295,18 @@ struct RecruitmentPostSheet: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("投稿") {
                         if !title.isEmpty && !pace.isEmpty && !location.isEmpty {
-                            onPost(title, selectedDate, pace, location, description)
+                            if isRecurring {
+                                let cal = Calendar.current
+                                let comps = DateComponents(
+                                    hour: cal.component(.hour, from: recurringTime),
+                                    minute: cal.component(.minute, from: recurringTime),
+                                    weekday: recurringWeekday
+                                )
+                                let date = cal.nextDate(after: Date(), matching: comps, matchingPolicy: .nextTime) ?? recurringTime
+                                onPost(title, date, pace, location, description, true, recurringWeekday)
+                            } else {
+                                onPost(title, selectedDate, pace, location, description, false, nil)
+                            }
                         }
                     }
                     .foregroundColor(isValid ? Color(hex: "2E5CFF") : Color.gray)
@@ -1304,14 +1322,18 @@ struct RecruitmentPostSheet: View {
     }
 }
 
-// MARK: - Age Range Slider（1本のバーで最小・最大を指定）
+// MARK: - Age Range Slider（1本のバーで下限・上限の両方を操作）
 private struct AgeRangeSlider: View {
     @Binding var ageMin: Int
     @Binding var ageMax: Int
     let range: ClosedRange<Int>
     
+    @State private var dragStartMin: Int?
+    @State private var dragStartMax: Int?
+    
     private let trackHeight: CGFloat = 8
-    private let thumbSize: CGFloat = 24
+    private let thumbSize: CGFloat = 28
+    private let thumbTouchPadding: CGFloat = 12
     
     private var rangeSpan: Int { range.upperBound - range.lowerBound }
     
@@ -1324,61 +1346,68 @@ private struct AgeRangeSlider: View {
             let maxX = maxFraction * w
             
             ZStack(alignment: .leading) {
-                // 背景バー
+                // 背景バー（タッチは透過）
                 RoundedRectangle(cornerRadius: trackHeight / 2)
                     .fill(Color.gray.opacity(0.2))
                     .frame(height: trackHeight)
+                    .allowsHitTesting(false)
                 
-                // 選択範囲（青い部分）
+                // 選択範囲（青い部分・タッチは透過）
                 RoundedRectangle(cornerRadius: trackHeight / 2)
                     .fill(Color(hex: "2E5CFF"))
                     .frame(width: max(0, maxX - minX), height: trackHeight)
                     .offset(x: minX)
+                    .allowsHitTesting(false)
                 
-                // 左つまみ（最小）— 指の位置でバー上の位置を計算
-                Circle()
-                    .fill(Color.white)
-                    .frame(width: thumbSize, height: thumbSize)
-                    .shadow(color: .black.opacity(0.15), radius: 2, x: 0, y: 1)
-                    .overlay(Circle().stroke(Color(hex: "2E5CFF"), lineWidth: 2))
-                    .offset(x: minX - thumbSize / 2)
-                    .contentShape(Rectangle())
-                    .gesture(
+                // 左つまみ（下限）
+                thumbCircle(x: minX)
+                    .highPriorityGesture(
                         DragGesture(minimumDistance: 0)
                             .onChanged { value in
-                                let fingerXInBar = (minX - thumbSize / 2) + value.location.x
-                                let fraction = max(0, min(1, fingerXInBar / w))
-                                let newMin = range.lowerBound + Int(fraction * CGFloat(rangeSpan))
+                                let start = dragStartMin ?? ageMin
+                                if dragStartMin == nil { dragStartMin = ageMin }
+                                let delta = Int(round(value.translation.width / w * CGFloat(rangeSpan)))
+                                let newMin = start + delta
                                 ageMin = min(max(newMin, range.lowerBound), ageMax)
                             }
+                            .onEnded { _ in dragStartMin = nil }
                     )
                 
-                // 右つまみ（最大）
-                Circle()
-                    .fill(Color.white)
-                    .frame(width: thumbSize, height: thumbSize)
-                    .shadow(color: .black.opacity(0.15), radius: 2, x: 0, y: 1)
-                    .overlay(Circle().stroke(Color(hex: "2E5CFF"), lineWidth: 2))
-                    .offset(x: maxX - thumbSize / 2)
-                    .contentShape(Rectangle())
-                    .gesture(
+                // 右つまみ（上限）
+                thumbCircle(x: maxX)
+                    .highPriorityGesture(
                         DragGesture(minimumDistance: 0)
                             .onChanged { value in
-                                let fingerXInBar = (maxX - thumbSize / 2) + value.location.x
-                                let fraction = max(0, min(1, fingerXInBar / w))
-                                let newMax = range.lowerBound + Int(fraction * CGFloat(rangeSpan))
+                                let start = dragStartMax ?? ageMax
+                                if dragStartMax == nil { dragStartMax = ageMax }
+                                let delta = Int(round(value.translation.width / w * CGFloat(rangeSpan)))
+                                let newMax = start + delta
                                 ageMax = max(min(newMax, range.upperBound), ageMin)
                             }
+                            .onEnded { _ in dragStartMax = nil }
                     )
             }
-            .frame(height: thumbSize)
+            .frame(height: thumbSize + thumbTouchPadding * 2)
         }
-        .frame(height: 24)
+        .frame(height: 44)
+    }
+    
+    private func thumbCircle(x: CGFloat) -> some View {
+        Circle()
+            .fill(Color.white)
+            .frame(width: thumbSize, height: thumbSize)
+            .shadow(color: .black.opacity(0.2), radius: 2, x: 0, y: 1)
+            .overlay(Circle().stroke(Color(hex: "2E5CFF"), lineWidth: 2))
+            .offset(x: x - thumbSize / 2)
+            .padding(.vertical, thumbTouchPadding)
+            .contentShape(Rectangle())
+            .zIndex(1)
     }
 }
 
 // MARK: - Filter Detail Sheet
 struct FilterDetailSheet: View {
+    @Binding var searchText: String
     let selectedMode: String
     @Binding var prefecture: String
     @Binding var ageGroup: String
@@ -1401,14 +1430,14 @@ struct FilterDetailSheet: View {
     
     // Practices用
     @Binding var practiceCategory: PracticeCategory?
-    @Binding var practiceDay: String
+    @Binding var practiceFilterDate: Date?
     @Binding var practiceSpot: String
     @Binding var practiceCapacity: String
-    @Binding var practiceStartTime: String
     let onApply: () -> Void
     let onClear: () -> Void
     @Environment(\.dismiss) var dismiss
     @State private var localRunSpot: String = ""
+    @State private var practiceDateSelection: Date = Date()  // 日時ピッカー用（日付・時刻の両方）
     
     // 47都道府県（JISコード順）
     private let prefectures = [
@@ -1437,13 +1466,22 @@ struct FilterDetailSheet: View {
     private let spotSuggestions = ["皇居", "大阪城公園", "駒沢公園", "みなとみらい", "代々木公園", "名古屋城", "大濠公園"]
     
     // Practices用
-    private let daysOfWeek = ["指定なし", "平日", "土日", "月", "火", "水", "木", "金", "土", "日"]
     private let capacities = ["指定なし", "〜5名", "〜10名", "11名〜"]
-    private let timeBands = ["指定なし", "朝 (〜9:00)", "昼 (9〜17時)", "夜 (17時〜)"]
     
     var body: some View {
         NavigationStack {
             Form {
+                // 検索テキスト（フィルター内に内包）
+                Section(header: Text("検索")) {
+                    HStack {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundColor(Color(hex: "0F1A2E").opacity(0.5))
+                        TextField("名前・エリア・目的など", text: $searchText)
+                            .font(.system(size: 16))
+                            .foregroundColor(Color(hex: "0F1A2E"))
+                    }
+                }
+                
                 if selectedMode == "Runners" {
                     // ランク（階層型）
                     Section(header: Text("ランク")) {
@@ -1569,12 +1607,29 @@ struct FilterDetailSheet: View {
                         }
                     }
                     
-                    Section(header: Text("曜日")) {
-                        Picker("曜日", selection: $practiceDay) {
-                            ForEach(daysOfWeek, id: \.self) { day in
-                                Text(day).tag(day)
+                    // 日時（カレンダー＋時刻で検索）
+                    Section(header: Text("日時"), footer: Text("選択した日付に開催される練習のみ表示されます。")) {
+                        let calendar = Calendar.current
+                        DatePicker("開催日", selection: Binding(
+                            get: { practiceDateSelection },
+                            set: { newDay in
+                                let merged = calendar.date(bySettingHour: calendar.component(.hour, from: practiceDateSelection), minute: calendar.component(.minute, from: practiceDateSelection), second: 0, of: newDay) ?? newDay
+                                practiceDateSelection = merged
+                                practiceFilterDate = merged
                             }
-                        }
+                        ), displayedComponents: .date)
+                        .datePickerStyle(.compact)
+                        .tint(Color(hex: "2E5CFF"))
+                        
+                        DatePicker("開催時刻", selection: Binding(
+                            get: { practiceDateSelection },
+                            set: { newTime in
+                                let merged = calendar.date(bySettingHour: calendar.component(.hour, from: newTime), minute: calendar.component(.minute, from: newTime), second: 0, of: practiceDateSelection) ?? newTime
+                                practiceDateSelection = merged
+                                practiceFilterDate = merged
+                            }
+                        ), displayedComponents: .hourAndMinute)
+                        .tint(Color(hex: "2E5CFF"))
                     }
                     
                     Section(header: Text("よく走る場所")) {
@@ -1610,13 +1665,6 @@ struct FilterDetailSheet: View {
                         }
                     }
                     
-                    Section(header: Text("スタート時間")) {
-                        Picker("スタート時間", selection: $practiceStartTime) {
-                            ForEach(timeBands, id: \.self) { band in
-                                Text(band).tag(band)
-                            }
-                        }
-                    }
                 }
             }
             .navigationTitle("詳細フィルター")
@@ -1633,12 +1681,12 @@ struct FilterDetailSheet: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("条件をクリア") {
                         onClear()
+                        searchText = ""
                         localRunSpot = ""
                         practiceCategory = nil
-                        practiceDay = "指定なし"
+                        practiceFilterDate = nil
                         practiceSpot = ""
                         practiceCapacity = "指定なし"
-                        practiceStartTime = "指定なし"
                     }
                     .foregroundColor(Color(hex: "2E5CFF"))
                 }
@@ -1663,6 +1711,7 @@ struct FilterDetailSheet: View {
             }
             .onAppear {
                 localRunSpot = runSpot
+                practiceDateSelection = practiceFilterDate ?? Date()
             }
         }
     }

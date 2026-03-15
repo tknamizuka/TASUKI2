@@ -297,8 +297,17 @@ struct PracticeRecruitment: Identifiable {
     /// practiceID に紐づく参加ユーザーID一覧（例: Firebase UID）
     var participantUserIds: [String]
     let maxParticipants: Int
+    /// 毎週繰り返しなら true
+    var isRecurring: Bool = false
+    /// 毎週のときの曜日（Calendar.weekday: 1=日, 2=月, ... 7=土）
+    var recurringWeekday: Int? = nil
+    
+    private static let weekdaySymbols = ["日", "月", "火", "水", "木", "金", "土"]
     
     var dayOfWeek: String {
+        if isRecurring, let w = recurringWeekday, (1...7).contains(w) {
+            return "毎週\(Self.weekdaySymbols[w - 1])"
+        }
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "ja_JP")
         formatter.dateFormat = "E"
@@ -311,14 +320,35 @@ struct PracticeRecruitment: Identifiable {
         return formatter.string(from: date)
     }
     
+    /// 検索用: 指定日付に「開催される」か（一度きりは同日、毎週は曜日一致）
+    func matches(filterDate: Date) -> Bool {
+        let cal = Calendar.current
+        if isRecurring, let w = recurringWeekday {
+            return cal.component(.weekday, from: filterDate) == w
+        }
+        return cal.isDate(date, inSameDayAs: filterDate)
+    }
+    
     // Practiceへの変換（詳細画面用）
     func toPractice() -> Practice {
-        Practice(
+        let displayDate: Date
+        if isRecurring, let w = recurringWeekday {
+            let cal = Calendar.current
+            let comps = DateComponents(
+                hour: cal.component(.hour, from: date),
+                minute: cal.component(.minute, from: date),
+                weekday: w
+            )
+            displayDate = cal.nextDate(after: Date(), matching: comps, matchingPolicy: .nextTime) ?? date
+        } else {
+            displayDate = date
+        }
+        return Practice(
             practiceId: self.practiceId,
             chatId: self.chatId,
             title: self.title,
             location: self.location,
-            date: self.date,
+            date: displayDate,
             category: self.category,
             pace: self.pace,
             distance: self.distance,
@@ -502,7 +532,9 @@ let mockRecruitments: [PracticeRecruitment] = [
         description: "サブ3〜3.5目標の方向けのペース走です。途中離脱OK、一緒にビルドアップしましょう。",
         applicants: [],
         participantUserIds: [],
-        maxParticipants: 10
+        maxParticipants: 10,
+        isRecurring: false,
+        recurringWeekday: nil
     ),
     PracticeRecruitment(
         practiceId: "mock-practice-2",
@@ -540,7 +572,9 @@ let mockRecruitments: [PracticeRecruitment] = [
         description: "フルマラソンに向けた脚づくり用のLSDです。会話できるペースでゆっくり走ります。",
         applicants: [],
         participantUserIds: [],
-        maxParticipants: 8
+        maxParticipants: 8,
+        isRecurring: false,
+        recurringWeekday: nil
     ),
     PracticeRecruitment(
         practiceId: "mock-practice-3",
@@ -578,7 +612,56 @@ let mockRecruitments: [PracticeRecruitment] = [
         description: "走るペースはゆっくり、会話メインのおしゃべりランです。ラン後にカフェで一息つきましょう。",
         applicants: [],
         participantUserIds: [],
-        maxParticipants: 6
+        maxParticipants: 6,
+        isRecurring: false,
+        recurringWeekday: nil
+    ),
+    PracticeRecruitment(
+        practiceId: "mock-practice-4",
+        chatId: nil,
+        host: PartnerUser(
+            name: "Takeshi",
+            rank: "A",
+            avatarImage: "person.circle.fill",
+            isOnline: true,
+            bestCategory: .half,
+            bestTime: "1:28:00",
+            age: 30,
+            runningSchedule: .weekdayMorning,
+            purpose: "サブ3目標",
+            nextRace: "東京マラソン",
+            targetTime: "2:55:00",
+            runningSpots: ["皇居"],
+            prefecture: "東京都",
+            gender: .male,
+            condition: .excellent,
+            statusMessage: "毎週水曜朝の皇居ラン！",
+            ageGroup: "30s",
+            runningGoal: "サブ3",
+            personalBest: "2:58:00",
+            activeTime: "Morning",
+            easyPace: "4:45/km",
+            connectionStyle: .real
+        ),
+        title: "毎週水曜 皇居 朝ラン 10km",
+        location: "皇居",
+        date: {
+            let cal = Calendar.current
+            var c = DateComponents()
+            c.weekday = 4
+            c.hour = 7
+            c.minute = 0
+            return cal.nextDate(after: Date(), matching: c, matchingPolicy: .nextTime) ?? Date()
+        }(),
+        category: .pace,
+        pace: "5:00/km",
+        distance: "10km",
+        description: "毎週水曜朝7時から。皇居1周約5kmを2周。仕事前にさっと走りましょう。",
+        applicants: [],
+        participantUserIds: [],
+        maxParticipants: 12,
+        isRecurring: true,
+        recurringWeekday: 4
     )
 ]
 

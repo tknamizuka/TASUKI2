@@ -34,6 +34,8 @@ struct MessageConversation: Identifiable {
     let hasUnread: Bool
     /// 練習会チャットかどうか（partnerName や practiceId などで判定）
     let isPractice: Bool
+    /// 最終メッセージの送信者名（練習会チャットで「誰が発信したか」を表示する用、任意）
+    let lastMessageSenderName: String?
     
     var id: String { conversationId }
     
@@ -44,7 +46,8 @@ struct MessageConversation: Identifiable {
         lastMessage: String,
         timestamp: Date = Date(),
         hasUnread: Bool = false,
-        isPractice: Bool = false
+        isPractice: Bool = false,
+        lastMessageSenderName: String? = nil
     ) {
         self.conversationId = conversationId
         self.partnerName = partnerName
@@ -53,6 +56,7 @@ struct MessageConversation: Identifiable {
         self.timestamp = timestamp
         self.hasUnread = hasUnread
         self.isPractice = isPractice
+        self.lastMessageSenderName = lastMessageSenderName
     }
 }
 
@@ -109,7 +113,8 @@ struct MessageListView: View {
                                         NavigationLink(
                                             destination: ChatView(
                                                 conversationId: conversation.conversationId,
-                                                partnerName: conversation.partnerName
+                                                partnerName: conversation.partnerName,
+                                                isPractice: true
                                             )
                                         ) {
                                             conversationRowView(conversation: conversation)
@@ -186,14 +191,16 @@ struct MessageListView: View {
     
     // MARK: - Conversation Row View
     private func conversationRowView(conversation: MessageConversation) -> some View {
-        HStack(spacing: 12) {
-            // アバター画像（左）
+        let iconSize: CGFloat = conversation.isPractice ? 36 : 50
+        let frameSize: CGFloat = conversation.isPractice ? 44 : 56
+        return HStack(spacing: 12) {
+            // アバター画像（左）（練習会はやや小さめ）
             if let avatarImage = conversation.avatarImage {
                 Image(systemName: avatarImage)
-                    .font(.system(size: 50))
+                    .font(.system(size: iconSize))
                     .foregroundColor(Color(hex: "0F1A2E"))
                     .saturation(0)
-                    .frame(width: 56, height: 56)
+                    .frame(width: frameSize, height: frameSize)
                     .background(
                         Circle()
                             .fill(Color(hex: "F5F7FA"))
@@ -201,10 +208,10 @@ struct MessageListView: View {
             } else {
                 Circle()
                     .fill(Color(hex: "F5F7FA"))
-                    .frame(width: 56, height: 56)
+                    .frame(width: frameSize, height: frameSize)
             }
             
-            // 中央: 名前と最新メッセージ（未読時は名前を太字＋青ドット）
+            // 中央: 名前と最新メッセージ（練習会は送信者名も表示）
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
                     if conversation.hasUnread {
@@ -218,10 +225,17 @@ struct MessageListView: View {
                         .lineLimit(1)
                 }
                 
-                Text(conversation.lastMessage)
-                    .font(.system(size: 14, weight: .regular))
-                    .foregroundColor(conversation.hasUnread ? Color(hex: "0F1A2E").opacity(0.8) : Color(hex: "0F1A2E").opacity(0.6))
-                    .lineLimit(1)
+                if conversation.isPractice, let sender = conversation.lastMessageSenderName, !sender.isEmpty {
+                    Text("\(sender): \(conversation.lastMessage)")
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundColor(conversation.hasUnread ? Color(hex: "0F1A2E").opacity(0.8) : Color(hex: "0F1A2E").opacity(0.6))
+                        .lineLimit(2)
+                } else {
+                    Text(conversation.lastMessage)
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundColor(conversation.hasUnread ? Color(hex: "0F1A2E").opacity(0.8) : Color(hex: "0F1A2E").opacity(0.6))
+                        .lineLimit(1)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             
@@ -325,7 +339,7 @@ struct MessageListView: View {
         let calendar = Calendar.current
         let now = Date()
         conversations = [
-            // 参加予定の練習会チャット（サンプル）
+            // 参加予定の練習会チャット（サンプル・送信者名付き）
             MessageConversation(
                 conversationId: "dummy-practice-kokyo",
                 partnerName: "練習会: 皇居ラン 2周 ゆっくりペース",
@@ -333,7 +347,8 @@ struct MessageListView: View {
                 lastMessage: "集合は噴水前です。5分前には集まってください！",
                 timestamp: calendar.date(byAdding: .minute, value: -10, to: now) ?? now,
                 hasUnread: true,
-                isPractice: true
+                isPractice: true,
+                lastMessageSenderName: "Kenji_Run"
             ),
             MessageConversation(
                 conversationId: "dummy-practice-yoyogi",
@@ -342,7 +357,8 @@ struct MessageListView: View {
                 lastMessage: "ゆっくり6:30/kmペースで行きましょう。",
                 timestamp: calendar.date(byAdding: .hour, value: -2, to: now) ?? now,
                 hasUnread: false,
-                isPractice: true
+                isPractice: true,
+                lastMessageSenderName: "さっちゃん"
             ),
             // 個別チャット（サンプル）
             MessageConversation(
