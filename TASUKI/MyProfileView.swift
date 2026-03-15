@@ -63,28 +63,17 @@ struct MyProfileView: View {
                             
                             // 名前、改行してランク・UUID（各々別行、コピー付き）
                             VStack(spacing: 8) {
-                                // 名前 + ポイントバッジ（1行目、中央揃え）
-                                HStack(spacing: 8) {
+                                // 名前 + バッジ（公認マーク風・名前の直後にアイコン）
+                                HStack(spacing: 6) {
                                     Text(name)
                                         .font(.system(size: 28, weight: .bold))
                                         .foregroundColor(Color(hex: "0F1A2E"))
                                         .lineLimit(1)
                                         .minimumScaleFactor(0.8)
                                     if let tier = myBadgeTier {
-                                        HStack(spacing: 4) {
-                                            Image(systemName: tier.iconName)
-                                                .font(.system(size: 14, weight: .semibold))
-                                                .foregroundColor(tier.color)
-                                            Text(tier.displayName)
-                                                .font(.system(size: 13, weight: .semibold))
-                                                .foregroundColor(Color(hex: "0F1A2E"))
-                                        }
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 8)
-                                                .fill(Color(hex: "0F1A2E").opacity(0.06))
-                                        )
+                                        Image(systemName: tier.iconName)
+                                            .font(.system(size: 16, weight: .semibold))
+                                            .foregroundColor(tier.color)
                                     }
                                 }
                                 .frame(maxWidth: .infinity, alignment: .center)

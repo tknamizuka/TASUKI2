@@ -96,13 +96,17 @@ struct PartnerDetailView: View {
                                 )
                         }
                         
-                        // 名前、年齢、ランク
+                        // 名前 + バッジ（公認マーク風）、年齢、ランク
                         VStack(spacing: 8) {
                             HStack(spacing: 8) {
                                 Text(user.name)
                                     .font(.system(size: 28, weight: .bold))
                                     .foregroundColor(Color(hex: "0F1A2E"))
-                                
+                                if let tier = PointBadgeHelper.tier(forTotalPoints: user.totalPoints) {
+                                    Image(systemName: tier.iconName)
+                                        .font(.system(size: 18, weight: .semibold))
+                                        .foregroundColor(tier.color)
+                                }
                                 Text("(\(user.age))")
                                     .font(.system(size: 24, weight: .regular))
                                     .foregroundColor(Color(hex: "0F1A2E").opacity(0.7))

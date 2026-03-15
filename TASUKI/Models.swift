@@ -224,6 +224,8 @@ struct PartnerUser: Identifiable {
     let activeTime: String
     let easyPace: String
     let connectionStyle: ConnectionStyle
+    /// TASUKI累計ポイント（バッジ表示用、未指定時0）
+    var totalPoints: Int = 0
     
     // 互換性のためのプロパティ
     var location: String { prefecture }
@@ -255,7 +257,7 @@ struct PartnerUser: Identifiable {
             monthlyDistance: 0.0,
             monthlyTarget: 0.0,
             avgPace: self.easyPace,
-            totalPoints: 0,
+            totalPoints: self.totalPoints,
             monthlyPoints: 0,
             matchRate: 0,
             lastLogin: Date(),

@@ -98,7 +98,8 @@ struct FindView: View {
             personalBest: "2:58:00",
             activeTime: "Morning",
             easyPace: "4:30/km",
-            connectionStyle: .real
+            connectionStyle: .real,
+            totalPoints: 28000
         ),
         PartnerUser(
             name: "さっちゃん",
@@ -122,7 +123,8 @@ struct FindView: View {
             personalBest: "3:15:00",
             activeTime: "Night",
             easyPace: "5:00/km",
-            connectionStyle: .real
+            connectionStyle: .real,
+            totalPoints: 12000
         ),
         PartnerUser(
             name: "Taka@Sub3",
@@ -146,7 +148,8 @@ struct FindView: View {
             personalBest: nil,
             activeTime: "Morning",
             easyPace: "5:30/km",
-            connectionStyle: .both
+            connectionStyle: .both,
+            totalPoints: 6500
         ),
         PartnerUser(
             name: "Momo",
@@ -170,7 +173,8 @@ struct FindView: View {
             personalBest: nil,
             activeTime: "Holiday",
             easyPace: "6:00/km",
-            connectionStyle: .virtual
+            connectionStyle: .virtual,
+            totalPoints: 2200
         ),
         PartnerUser(
             name: "Runner123",
@@ -194,7 +198,8 @@ struct FindView: View {
             personalBest: nil,
             activeTime: "Night",
             easyPace: "6:30/km",
-            connectionStyle: .both
+            connectionStyle: .both,
+            totalPoints: 800
         ),
         PartnerUser(
             name: "マラソン太郎",
@@ -218,7 +223,8 @@ struct FindView: View {
             personalBest: "2:45:00",
             activeTime: "Morning",
             easyPace: "4:00/km",
-            connectionStyle: .real
+            connectionStyle: .real,
+            totalPoints: 52000
         ),
         PartnerUser(
             name: "みか",
@@ -242,7 +248,8 @@ struct FindView: View {
             personalBest: "3:45:00",
             activeTime: "Morning",
             easyPace: "5:15/km",
-            connectionStyle: .both
+            connectionStyle: .both,
+            totalPoints: 15000
         ),
         PartnerUser(
             name: "Hiro_Runner",
@@ -266,7 +273,8 @@ struct FindView: View {
             personalBest: "3:30:00",
             activeTime: "Night",
             easyPace: "5:45/km",
-            connectionStyle: .virtual
+            connectionStyle: .virtual,
+            totalPoints: 3500
         ),
         PartnerUser(
             name: "あきこ",
@@ -290,7 +298,8 @@ struct FindView: View {
             personalBest: nil,
             activeTime: "Holiday",
             easyPace: "6:15/km",
-            connectionStyle: .virtual
+            connectionStyle: .virtual,
+            totalPoints: 1100
         ),
         PartnerUser(
             name: "RunTaka",
@@ -314,7 +323,8 @@ struct FindView: View {
             personalBest: nil,
             activeTime: "Holiday",
             easyPace: "6:45/km",
-            connectionStyle: .both
+            connectionStyle: .both,
+            totalPoints: 500
         )
     ]
     
@@ -996,7 +1006,11 @@ struct FindView: View {
                     Text(user.name)
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(Color(hex: "0F1A2E"))
-                    
+                    if let tier = PointBadgeHelper.tier(forTotalPoints: user.totalPoints) {
+                        Image(systemName: tier.iconName)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(tier.color)
+                    }
                     Text("Rank \(user.rank)")
                         .font(.system(size: 12, weight: .regular))
                         .foregroundColor(Color(hex: "0F1A2E").opacity(0.7))
