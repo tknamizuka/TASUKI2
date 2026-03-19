@@ -33,6 +33,10 @@ final class RaceManager: ObservableObject {
     
     private static let sampleRaceIdPrefix = "sample_"
     private func isSampleRace(_ raceId: String) -> Bool { raceId.hasPrefix(Self.sampleRaceIdPrefix) }
+
+    private func trackRaceEvent(_ name: String, properties: [String: Any] = [:]) {
+        RealityMiningManager.shared.trackEvent(name: name, properties: properties)
+    }
     
     // MARK: - Create / Join
     
@@ -53,9 +57,14 @@ final class RaceManager: ObservableObject {
         ]
         ref.setData(data) { [weak self] error in
             if let error = error {
+                self?.trackRaceEvent(
+                    "race_create_failed",
+                    properties: ["category": category.rawValue, "error_message": error.localizedDescription]
+                )
                 completion(.failure(error))
                 return
             }
+            self?.trackRaceEvent("race_created", properties: ["category": category.rawValue, "race_id": ref.documentID])
             self?.joinRace(raceId: ref.documentID, userId: uid, name: userName, rank: userRank) { result in
                 switch result {
                 case .success: completion(.success(ref.documentID))
@@ -92,8 +101,13 @@ final class RaceManager: ObservableObject {
         ]
         ref.setData(data, merge: true) { error in
             if let error = error {
+                self.trackRaceEvent(
+                    "race_join_failed",
+                    properties: ["race_id": raceId, "error_message": error.localizedDescription]
+                )
                 completion(.failure(error))
             } else {
+                self.trackRaceEvent("race_joined", properties: ["race_id": raceId, "rank": rank ?? ""])
                 completion(.success(()))
             }
         }
@@ -136,6 +150,10 @@ final class RaceManager: ObservableObject {
             race.startTime = startTime
             DispatchQueue.main.async { [weak self] in
                 self?.currentRace = race
+                self?.trackRaceEvent(
+                    "race_start_requested",
+                    properties: ["race_id": raceId, "countdown_sec": countdownSeconds, "mode": "sample"]
+                )
                 completion(.success(()))
             }
             return
@@ -146,8 +164,16 @@ final class RaceManager: ObservableObject {
             "startTime": Timestamp(date: startTime)
         ]) { error in
             if let error = error {
+                self.trackRaceEvent(
+                    "race_start_failed",
+                    properties: ["race_id": raceId, "error_message": error.localizedDescription]
+                )
                 completion(.failure(error))
             } else {
+                self.trackRaceEvent(
+                    "race_start_requested",
+                    properties: ["race_id": raceId, "countdown_sec": countdownSeconds, "mode": "live"]
+                )
                 completion(.success(()))
             }
         }
@@ -288,6 +314,12 @@ final class RaceManager: ObservableObject {
         guard let uid = currentUserId else { return }
         db.collection("races").document(raceId).collection("participants").document(uid)
             .updateData(["currentDistanceKm": distanceKm]) { _ in }
+        if distanceKm > 0 {
+            let bucket = Int(distanceKm)
+            if bucket > 0 && abs(distanceKm - Double(bucket)) < 0.02 {
+                trackRaceEvent("race_distance_progress", properties: ["race_id": raceId, "distance_bucket_km": bucket])
+            }
+        }
     }
     
     /// ゴールを記録（経過秒数を送信）
@@ -296,6 +328,10 @@ final class RaceManager: ObservableObject {
             var p = participants[idx]
             p.finishTimeSeconds = finishTimeSeconds
             participants[idx] = p
+            trackRaceEvent(
+                "race_finish_submitted",
+                properties: ["race_id": raceId, "finish_time_sec": finishTimeSeconds, "mode": "sample"]
+            )
             DispatchQueue.main.async { completion(.success(())) }
             return
         }
@@ -306,8 +342,16 @@ final class RaceManager: ObservableObject {
         db.collection("races").document(raceId).collection("participants").document(uid)
             .updateData(["finishTimeSeconds": finishTimeSeconds]) { error in
                 if let error = error {
+                    self.trackRaceEvent(
+                        "race_finish_submit_failed",
+                        properties: ["race_id": raceId, "error_message": error.localizedDescription]
+                    )
                     completion(.failure(error))
                 } else {
+                    self.trackRaceEvent(
+                        "race_finish_submitted",
+                        properties: ["race_id": raceId, "finish_time_sec": finishTimeSeconds, "mode": "live"]
+                    )
                     completion(.success(()))
                 }
             }
@@ -319,6 +363,7 @@ final class RaceManager: ObservableObject {
             race.status = .finished
             DispatchQueue.main.async { [weak self] in
                 self?.currentRace = race
+                self?.trackRaceEvent("race_finished", properties: ["race_id": raceId, "mode": "sample"])
                 completion(.success(()))
             }
             return
@@ -327,8 +372,13 @@ final class RaceManager: ObservableObject {
             "status": RaceStatus.finished.rawValue
         ]) { error in
             if let error = error {
+                self.trackRaceEvent(
+                    "race_finish_failed",
+                    properties: ["race_id": raceId, "error_message": error.localizedDescription]
+                )
                 completion(.failure(error))
             } else {
+                self.trackRaceEvent("race_finished", properties: ["race_id": raceId, "mode": "live"])
                 completion(.success(()))
             }
         }

@@ -42,6 +42,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 struct TASUKIApp: App {
     
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var authManager = AuthManager()
     @StateObject private var userManager = UserManager()
     @StateObject private var joinedPracticesStore = JoinedPracticesStore()
@@ -111,6 +112,16 @@ struct TASUKIApp: App {
                     await updateAppState()
                 }
             }
+            .onChange(of: scenePhase) { newPhase in
+                switch newPhase {
+                case .active:
+                    RealityMiningManager.shared.trackEvent(name: "app_foreground")
+                case .background:
+                    RealityMiningManager.shared.trackEvent(name: "app_background")
+                default:
+                    break
+                }
+            }
         }
     }
     
@@ -119,6 +130,7 @@ struct TASUKIApp: App {
     /// アプリ起動時の初期化処理（きっかり2秒で画面遷移）
     @MainActor
     private func startApp() async {
+        RealityMiningManager.shared.trackEvent(name: "app_session_start")
         // 1. 現在時刻を記録
         let startTime = Date()
         

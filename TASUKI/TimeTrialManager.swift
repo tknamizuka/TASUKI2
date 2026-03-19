@@ -32,6 +32,10 @@ final class TimeTrialManager: ObservableObject {
     
     private static let sampleRoomIdPrefix = "sample_"
     private func isSampleRoom(_ roomId: String) -> Bool { roomId.hasPrefix(Self.sampleRoomIdPrefix) }
+
+    private func trackTimeTrialEvent(_ name: String, properties: [String: Any] = [:]) {
+        RealityMiningManager.shared.trackEvent(name: name, properties: properties)
+    }
     
     /// "Rank S" -> "S", "Rank A" -> "A" など
     static func rankTier(fromRank rank: String?) -> String {
@@ -46,6 +50,7 @@ final class TimeTrialManager: ObservableObject {
     func createOrJoinRoom(distance: TimeTrialDistance, userRank: String?, userName: String, completion: @escaping (Result<String, Error>) -> Void) {
         if Auth.auth().currentUser == nil {
             // サンプル: 未ログインでもマッチング以降に進める
+            trackTimeTrialEvent("time_trial_match_sample", properties: ["distance_km": distance.distanceKm])
             completion(.success("sample_\(distance.rawValue)"))
             return
         }
@@ -63,6 +68,10 @@ final class TimeTrialManager: ObservableObject {
             .limit(to: 5)
             .getDocuments { [weak self] snapshot, error in
                 if let error = error {
+                    self?.trackTimeTrialEvent(
+                        "time_trial_match_failed",
+                        properties: ["distance_km": distance.distanceKm, "error_message": error.localizedDescription]
+                    )
                     completion(.failure(error))
                     return
                 }
@@ -72,6 +81,10 @@ final class TimeTrialManager: ObservableObject {
                     return count < 20
                 }
                 if let d = doc {
+                    self?.trackTimeTrialEvent(
+                        "time_trial_room_matched",
+                        properties: ["distance_km": distance.distanceKm, "room_id": d.documentID]
+                    )
                     self?.joinRoom(roomId: d.documentID, userId: uid, name: userName, rank: userRank, completion: completion)
                 } else {
                     self?.createRoom(distance: distance, rankTier: tier, userId: uid, userName: userName, userRank: userRank, completion: completion)
@@ -93,9 +106,17 @@ final class TimeTrialManager: ObservableObject {
         ]
         ref.setData(data) { [weak self] error in
             if let error = error {
+                self?.trackTimeTrialEvent(
+                    "time_trial_room_create_failed",
+                    properties: ["distance_km": distance.distanceKm, "error_message": error.localizedDescription]
+                )
                 completion(.failure(error))
                 return
             }
+            self?.trackTimeTrialEvent(
+                "time_trial_room_created",
+                properties: ["distance_km": distance.distanceKm, "room_id": ref.documentID, "rank_tier": rankTier]
+            )
             self?.joinRoom(roomId: ref.documentID, userId: userId, name: userName, rank: userRank) { result in
                 switch result {
                 case .success: completion(.success(ref.documentID))
@@ -114,10 +135,15 @@ final class TimeTrialManager: ObservableObject {
         ]
         ref.setData(data, merge: true) { [weak self] error in
             if let error = error {
+                self?.trackTimeTrialEvent(
+                    "time_trial_join_failed",
+                    properties: ["room_id": roomId, "error_message": error.localizedDescription]
+                )
                 completion(.failure(error))
                 return
             }
             self?.incrementParticipantCount(roomId: roomId)
+            self?.trackTimeTrialEvent("time_trial_joined", properties: ["room_id": roomId, "rank": rank ?? ""])
             completion(.success(roomId))
         }
     }
@@ -138,6 +164,10 @@ final class TimeTrialManager: ObservableObject {
                 p.submittedAt = Date()
                 participants[i] = p
             }
+            trackTimeTrialEvent(
+                "time_trial_submitted",
+                properties: ["room_id": roomId, "time_sec": timeSeconds, "mode": "sample"]
+            )
             DispatchQueue.main.async { completion(.success(())) }
             return
         }
@@ -152,8 +182,16 @@ final class TimeTrialManager: ObservableObject {
             "submittedAt": now
         ]) { error in
             if let error = error {
+                self.trackTimeTrialEvent(
+                    "time_trial_submit_failed",
+                    properties: ["room_id": roomId, "error_message": error.localizedDescription]
+                )
                 completion(.failure(error))
             } else {
+                self.trackTimeTrialEvent(
+                    "time_trial_submitted",
+                    properties: ["room_id": roomId, "time_sec": timeSeconds, "mode": "live"]
+                )
                 completion(.success(()))
             }
         }

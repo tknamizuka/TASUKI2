@@ -18,6 +18,7 @@ final class RunTracker: NSObject, ObservableObject {
     
     private let locationManager = CLLocationManager()
     private var lastLocation: CLLocation?
+    private var lastDistanceBucket: Int = 0
     
     override private init() {
         super.init()
@@ -40,13 +41,19 @@ final class RunTracker: NSObject, ObservableObject {
         requestPermissionIfNeeded()
         lastLocation = nil
         distanceKm = 0
+        lastDistanceBucket = 0
         locationError = nil
         locationManager.startUpdatingLocation()
         isTracking = true
+        RealityMiningManager.shared.trackEvent(name: "run_tracking_start")
     }
     
     func stop() {
         locationManager.stopUpdatingLocation()
+        RealityMiningManager.shared.trackEvent(
+            name: "run_tracking_stop",
+            properties: ["distance_km": distanceKm]
+        )
         isTracking = false
     }
     
@@ -64,6 +71,14 @@ extension RunTracker: CLLocationManagerDelegate {
             if meters > 0 && meters < 500 {
                 DispatchQueue.main.async {
                     self.distanceKm += meters / 1000.0
+                    let currentBucket = Int(self.distanceKm)
+                    if currentBucket > self.lastDistanceBucket {
+                        self.lastDistanceBucket = currentBucket
+                        RealityMiningManager.shared.trackEvent(
+                            name: "distance_bucket_reached",
+                            properties: ["distance_bucket_km": currentBucket]
+                        )
+                    }
                 }
             }
         }
@@ -73,6 +88,10 @@ extension RunTracker: CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         DispatchQueue.main.async {
             self.locationError = error.localizedDescription
+            RealityMiningManager.shared.trackEvent(
+                name: "location_tracking_error",
+                properties: ["error_message": error.localizedDescription]
+            )
         }
     }
     
@@ -81,7 +100,21 @@ extension RunTracker: CLLocationManagerDelegate {
         case .denied, .restricted:
             DispatchQueue.main.async {
                 self.locationError = "位置情報が許可されていません"
+                RealityMiningManager.shared.trackEvent(
+                    name: "location_permission_state",
+                    properties: ["state": "denied_or_restricted"]
+                )
             }
+        case .authorizedAlways, .authorizedWhenInUse:
+            RealityMiningManager.shared.trackEvent(
+                name: "location_permission_state",
+                properties: ["state": "authorized"]
+            )
+        case .notDetermined:
+            RealityMiningManager.shared.trackEvent(
+                name: "location_permission_state",
+                properties: ["state": "not_determined"]
+            )
         default:
             break
         }

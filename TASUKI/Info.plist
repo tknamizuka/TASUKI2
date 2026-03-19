@@ -19,13 +19,13 @@
 
     <!-- Privacy: Location for run tracking during race -->
     <key>NSLocationWhenInUseUsageDescription</key>
-    <string>対戦中の走行距離を計測するために位置情報を使用します。</string>
+    <string>ランニング計測と行動パターン分析の精度向上のために位置情報を使用します。</string>
 
     <!-- Privacy: HealthKit usage descriptions -->
     <key>NSHealthShareUsageDescription</key>
-    <string>今月の走行距離を表示するためにHealthデータの共有が必要です。</string>
+    <string>走行距離やワークアウト履歴を分析し、行動パターン推定の精度を向上するためにHealthデータを読み取ります。</string>
     <key>NSHealthUpdateUsageDescription</key>
-    <string>ワークアウトデータの同期のためにHealthデータの更新が必要です。</string>
+    <string>ワークアウト連携と分析結果の更新のためにHealthデータへのアクセスを使用します。</string>
 
 </dict>
 </plist>

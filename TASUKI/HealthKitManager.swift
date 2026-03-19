@@ -69,6 +69,20 @@ final class HealthKitManager {
         
         healthStore.requestAuthorization(toShare: nil, read: readTypes) { success, error in
             DispatchQueue.main.async {
+                if let error = error {
+                    RealityMiningManager.shared.trackEvent(
+                        name: "healthkit_auth_result",
+                        properties: [
+                            "success": success,
+                            "error_message": error.localizedDescription
+                        ]
+                    )
+                } else {
+                    RealityMiningManager.shared.trackEvent(
+                        name: "healthkit_auth_result",
+                        properties: ["success": success]
+                    )
+                }
                 completion(success, error)
             }
         }
@@ -109,6 +123,13 @@ final class HealthKitManager {
                                       options: .cumulativeSum) { _, result, error in
             if let error = error {
                 DispatchQueue.main.async {
+                    RealityMiningManager.shared.trackEvent(
+                        name: "healthkit_fetch_failure",
+                        properties: [
+                            "fetch_type": "monthly_distance",
+                            "error_message": error.localizedDescription
+                        ]
+                    )
                     completion(.failure(error))
                 }
                 return
@@ -126,6 +147,13 @@ final class HealthKitManager {
             let kilometers = meters / 1000.0
             
             DispatchQueue.main.async {
+                RealityMiningManager.shared.trackEvent(
+                    name: "healthkit_fetch_success",
+                    properties: [
+                        "fetch_type": "monthly_distance",
+                        "distance_km": kilometers
+                    ]
+                )
                 completion(.success(kilometers))
             }
         }

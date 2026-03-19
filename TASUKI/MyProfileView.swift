@@ -25,6 +25,7 @@ struct MyProfileView: View {
     @AppStorage("myAvgPace") private var avgPace: String = "5:30/km"
     @AppStorage("myMonthlyDist") private var monthlyDist: String = "150km"
     @AppStorage("myTotalPoints") private var myTotalPoints: Int = 0
+    @AppStorage("realityMiningConsentEnabled") private var realityMiningConsentEnabled: Bool = false
     
     // Bio
     @AppStorage("myBio") private var bio: String = "平日は仕事終わりに5-10km走ってます！週末は距離走やりたいです。"
@@ -246,8 +247,36 @@ struct MyProfileView: View {
                                 .padding(.horizontal, 20)
                         }
                         .padding(.top, 8)
+
+                        // F. Reality Mining 設定
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Reality Mining")
+                                .font(.system(size: 18, weight: .bold))
+                                .foregroundColor(Color(hex: "0F1A2E"))
+                                .padding(.horizontal, 20)
+
+                            Toggle(isOn: $realityMiningConsentEnabled) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("行動データ収集を許可")
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundColor(Color(hex: "0F1A2E"))
+                                    Text("推奨精度向上のために、画面利用やランニング関連イベントを収集します。")
+                                        .font(.system(size: 12, weight: .regular))
+                                        .foregroundColor(Color(hex: "0F1A2E").opacity(0.6))
+                                }
+                            }
+                            .tint(Color.royalBlue)
+                            .padding(16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color.white)
+                                    .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+                            )
+                            .padding(.horizontal, 20)
+                        }
+                        .padding(.top, 8)
                         
-                        // F. ログアウトボタン
+                        // G. ログアウトボタン
                         Button(action: {
                             authManager.signOut { result in
                                 if case let .failure(error) = result {
@@ -281,6 +310,9 @@ struct MyProfileView: View {
             }
             .task {
                 loadUserUUID()
+            }
+            .onChange(of: realityMiningConsentEnabled) { newValue in
+                RealityMiningManager.shared.updateConsent(enabled: newValue)
             }
             .overlay(alignment: .top) {
                 if showCopiedToast {

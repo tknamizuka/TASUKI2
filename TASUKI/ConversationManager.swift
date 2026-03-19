@@ -23,6 +23,10 @@ final class ConversationManager: UnreadCountProviderBase {
     private override init() { super.init() }
     
     var currentUserId: String? { Auth.auth().currentUser?.uid }
+
+    private func trackConversationEvent(_ name: String, properties: [String: Any] = [:]) {
+        RealityMiningManager.shared.trackEvent(name: name, properties: properties)
+    }
     
     /// 新規会話を開始し、バックエンドで一意の会話IDを発行して返す
     func createConversation(partnerUserId: String, partnerName: String, completion: @escaping (Result<String, Error>) -> Void) {
@@ -42,8 +46,16 @@ final class ConversationManager: UnreadCountProviderBase {
         data["lastReadAt"] = [myUid: now]
         ref.setData(data) { error in
             if let error = error {
+                self.trackConversationEvent(
+                    "conversation_create_failed",
+                    properties: ["error_message": error.localizedDescription]
+                )
                 completion(.failure(error))
             } else {
+                self.trackConversationEvent(
+                    "conversation_created",
+                    properties: ["conversation_id": ref.documentID]
+                )
                 completion(.success(ref.documentID))
             }
         }
@@ -85,8 +97,16 @@ final class ConversationManager: UnreadCountProviderBase {
         ]
         ref.setData(data) { error in
             if let error = error {
+                self.trackConversationEvent(
+                    "practice_conversation_create_failed",
+                    properties: ["practice_id": practiceId, "error_message": error.localizedDescription]
+                )
                 completion(.failure(error))
             } else {
+                self.trackConversationEvent(
+                    "practice_conversation_created",
+                    properties: ["practice_id": practiceId, "conversation_id": ref.documentID]
+                )
                 completion(.success(ref.documentID))
             }
         }
@@ -111,6 +131,17 @@ final class ConversationManager: UnreadCountProviderBase {
             }
             ids.append(userId)
             ref.updateData(["participantIds": ids]) { err in
+                if let err = err {
+                    self?.trackConversationEvent(
+                        "practice_chat_participant_add_failed",
+                        properties: ["conversation_id": conversationId, "error_message": err.localizedDescription]
+                    )
+                } else {
+                    self?.trackConversationEvent(
+                        "practice_chat_participant_added",
+                        properties: ["conversation_id": conversationId]
+                    )
+                }
                 completion?(err)
             }
         }
@@ -275,8 +306,16 @@ final class ConversationManager: UnreadCountProviderBase {
         }
         ref.setData(data) { error in
             if let error = error {
+                self.trackConversationEvent(
+                    "message_send_failed",
+                    properties: ["conversation_id": conversationId, "error_message": error.localizedDescription]
+                )
                 completion(.failure(error))
             } else {
+                self.trackConversationEvent(
+                    "message_sent",
+                    properties: ["conversation_id": conversationId, "message_id": ref.documentID]
+                )
                 completion(.success(ref.documentID))
             }
         }

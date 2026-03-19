@@ -19,6 +19,7 @@ struct HomeView: View {
     
     @State private var showRunHistory = false
     @State private var showPracticeCalendar = false
+    @StateObject private var behaviorFeatureManager = BehaviorFeatureManager()
     @EnvironmentObject private var unreadProvider: UnreadCountProviderBase
     @EnvironmentObject private var joinedPracticesStore: JoinedPracticesStore
     init(
@@ -132,6 +133,64 @@ struct HomeView: View {
             }
             
             Spacer()
+
+            // 2.5 行動特徴サマリ（Reality Mining）
+            VStack(alignment: .leading, spacing: 10) {
+                Text("BEHAVIOR INSIGHTS")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundColor(.gray)
+                    .tracking(2)
+
+                Group {
+                    if behaviorFeatureManager.isLoading {
+                        HStack {
+                            ProgressView()
+                            Text("行動特徴を読み込み中...")
+                                .font(.footnote)
+                                .foregroundColor(.gray)
+                        }
+                    } else if let feature = behaviorFeatureManager.latestFeature {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("週間ラン回数: \(feature.weeklyRunCount) 回")
+                            Text("先週比: \(feature.weeklyRunTrendDelta >= 0 ? "+" : "")\(feature.weeklyRunTrendDelta)")
+                            Text("継続スコア: \(Int(feature.consistencyScore * 100)) / 100")
+                            Text("ソーシャル活動: \(Int(feature.socialActivityScore * 100)) / 100")
+                            Text("週末アクティブ比率: \(Int(feature.weekendActivityRatio * 100))%")
+                            Text("ルーティン分散: \(Int(feature.routineSpreadScore * 100)) / 100")
+                            if feature.behaviorShiftScore >= 0.7 {
+                                Text("行動変化: 高め")
+                                    .foregroundColor(.orange)
+                            } else {
+                                Text("行動変化: 安定")
+                            }
+                            if let medianSec = feature.medianMessageIntervalSec {
+                                Text("チャット間隔中央値: \(Int(medianSec / 60)) 分")
+                            }
+                            if let hour = feature.topActiveHour {
+                                Text("活動ピーク: \(hour):00台")
+                            }
+                        }
+                        .font(.subheadline)
+                        .foregroundColor(Color(hex: "0F1A2E"))
+                    } else if let error = behaviorFeatureManager.errorMessage {
+                        Text("行動特徴の取得に失敗: \(error)")
+                            .font(.footnote)
+                            .foregroundColor(.red)
+                    } else {
+                        Text("行動特徴データがまだありません")
+                            .font(.footnote)
+                            .foregroundColor(.gray)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(14)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color(hex: "F5F7FA"))
+                )
+            }
+            .padding(.horizontal, 20)
             
             // 3. 保有ポイント（累計）表示
             VStack(spacing: 5) {
@@ -210,6 +269,7 @@ struct HomeView: View {
                 isHealthKitLoading = false
             }
             unreadProvider.refreshUnreadCount()
+            behaviorFeatureManager.fetchLatestFeature()
         }
     }
     
