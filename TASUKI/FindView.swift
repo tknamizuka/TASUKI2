@@ -1364,6 +1364,18 @@ private struct AgeRangeSlider: View {
                     .highPriorityGesture(
                         DragGesture(minimumDistance: 0)
                             .onChanged { value in
+                                // #region agent log
+                                debugLog(
+                                    hypothesisId: "H1",
+                                    location: "FindView.swift:AgeRangeSlider.min.onChanged",
+                                    message: "AgeRangeSlider min drag changed",
+                                    data: [
+                                        "ageMin": ageMin,
+                                        "ageMax": ageMax
+                                    ]
+                                )
+                                // #endregion
+                                
                                 let start = dragStartMin ?? ageMin
                                 if dragStartMin == nil { dragStartMin = ageMin }
                                 let delta = Int(round(value.translation.width / w * CGFloat(rangeSpan)))
@@ -1378,6 +1390,18 @@ private struct AgeRangeSlider: View {
                     .highPriorityGesture(
                         DragGesture(minimumDistance: 0)
                             .onChanged { value in
+                                // #region agent log
+                                debugLog(
+                                    hypothesisId: "H1",
+                                    location: "FindView.swift:AgeRangeSlider.max.onChanged",
+                                    message: "AgeRangeSlider max drag changed",
+                                    data: [
+                                        "ageMin": ageMin,
+                                        "ageMax": ageMax
+                                    ]
+                                )
+                                // #endregion
+                                
                                 let start = dragStartMax ?? ageMax
                                 if dragStartMax == nil { dragStartMax = ageMax }
                                 let delta = Int(round(value.translation.width / w * CGFloat(rangeSpan)))
@@ -1390,6 +1414,44 @@ private struct AgeRangeSlider: View {
             .frame(height: thumbSize + thumbTouchPadding * 2)
         }
         .frame(height: 44)
+    }
+
+    /// デバッグログを NDJSON 形式でファイルに追記する
+    private func debugLog(
+        hypothesisId: String,
+        location: String,
+        message: String,
+        data: [String: Any]
+    ) {
+        let log: [String: Any] = [
+            "sessionId": "62b7cb",
+            "runId": "pre-fix",
+            "hypothesisId": hypothesisId,
+            "location": location,
+            "message": message,
+            "data": data,
+            "timestamp": Int(Date().timeIntervalSince1970 * 1000)
+        ]
+
+        guard let jsonData = try? JSONSerialization.data(withJSONObject: log),
+              let jsonString = String(data: jsonData, encoding: .utf8) else {
+            return
+        }
+
+        let line = jsonString + "\n"
+        let url = URL(fileURLWithPath: "/Users/takuyanamizuka/Desktop/TASUKI/TASUKI/.cursor/debug-62b7cb.log")
+
+        if FileManager.default.fileExists(atPath: url.path) {
+            if let handle = try? FileHandle(forWritingTo: url) {
+                handle.seekToEndOfFile()
+                if let data = line.data(using: .utf8) {
+                    handle.write(data)
+                }
+                try? handle.close()
+            }
+        } else {
+            try? line.write(to: url, atomically: true, encoding: .utf8)
+        }
     }
     
     private func thumbCircle(x: CGFloat) -> some View {
