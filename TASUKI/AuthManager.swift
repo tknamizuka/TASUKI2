@@ -3,6 +3,47 @@ import FirebaseAuth
 import FirebaseCore
 import Combine
 
+enum SocialAuthProvider: CaseIterable, Identifiable {
+    case apple
+    case line
+    case google
+    case facebook
+
+    var id: String { providerID }
+
+    var providerID: String {
+        switch self {
+        case .apple:
+            return "apple.com"
+        case .line:
+            // Firebase Authentication の OIDC で LINE を設定した場合の一般的な provider ID
+            return "oidc.line"
+        case .google:
+            return "google.com"
+        case .facebook:
+            return "facebook.com"
+        }
+    }
+
+    var displayName: String {
+        switch self {
+        case .apple: return "Apple IDで続行"
+        case .line: return "LINEで続行"
+        case .google: return "Googleで続行"
+        case .facebook: return "Facebookで続行"
+        }
+    }
+
+    var scopes: [String] {
+        switch self {
+        case .apple:
+            return ["email", "name"]
+        default:
+            return []
+        }
+    }
+}
+
 final class AuthManager: ObservableObject {
     @Published var isUserLoggedIn: Bool = false
     @Published var isLoading: Bool = false
@@ -98,6 +139,30 @@ final class AuthManager: ObservableObject {
             }
         }
     }
+
+    func signIn(with provider: SocialAuthProvider, completion: @escaping (Result<Void, Error>) -> Void) {
+        isLoading = true
+        errorMessage = ""
+
+        let oauthProvider = OAuthProvider(providerID: provider.providerID)
+        if !provider.scopes.isEmpty {
+            oauthProvider.scopes = provider.scopes
+        }
+
+        Auth.auth().signIn(with: oauthProvider, uiDelegate: nil) { [weak self] _, error in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                self.isLoading = false
+                if let error = error as NSError? {
+                    self.errorMessage = self.socialAuthErrorMessage(error, provider: provider)
+                    completion(.failure(error))
+                } else {
+                    self.errorMessage = ""
+                    completion(.success(()))
+                }
+            }
+        }
+    }
     
     func signOut(completion: @escaping (Result<Void, Error>) -> Void) {
         do {
@@ -109,6 +174,26 @@ final class AuthManager: ObservableObject {
         } catch {
             completion(.failure(error))
         }
+    }
+
+    private func socialAuthErrorMessage(_ error: NSError, provider: SocialAuthProvider) -> String {
+        if let authError = AuthErrorCode(rawValue: error.code) {
+            switch authError.code {
+            case .operationNotAllowed:
+                return "\(provider.displayName) は現在利用できません。Firebase Console の認証設定を確認してください。"
+            case .webContextAlreadyPresented:
+                return "別のログイン画面が開いています。閉じてから再度お試しください。"
+            case .webContextCancelled:
+                return "ログインがキャンセルされました。"
+            case .webNetworkRequestFailed:
+                return "ネットワークエラーが発生しました。通信環境を確認してください。"
+            case .accountExistsWithDifferentCredential:
+                return "別のログイン方法で登録済みのアカウントです。既存の方法でログインしてください。"
+            default:
+                return "\(provider.displayName) でログインできませんでした。設定または通信状況を確認してください。"
+            }
+        }
+        return "\(provider.displayName) でログインできませんでした。"
     }
 }
 

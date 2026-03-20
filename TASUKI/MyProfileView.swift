@@ -40,6 +40,10 @@ struct MyProfileView: View {
             .filter { !$0.isEmpty }
     }
 
+    private var companionSources: [RunningDataSource] {
+        RunningDataSource.allCases.filter { $0 != .all }
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -266,13 +270,15 @@ struct MyProfileView: View {
             .pickerStyle(.menu)
             .tint(Color.tasukiPrimary)
 
-            Text("Garmin Connect / Suunto App が Appleヘルスに同期した記録を読み取ります。")
+            Text("選択したサービスの記録がAppleヘルスへ同期されている場合、TASUKIで読み取りできます。")
                 .font(.system(size: 12))
                 .foregroundColor(Color.tasukiMutedText)
 
-            HStack(spacing: 10) {
-                integrationButton(title: "Garminを開く", source: .garmin)
-                integrationButton(title: "Suuntoを開く", source: .suunto)
+            let columns = [GridItem(.adaptive(minimum: 120), spacing: 10)]
+            LazyVGrid(columns: columns, spacing: 10) {
+                ForEach(companionSources) { source in
+                    integrationButton(title: source.displayName, source: source)
+                }
             }
 
             if let integrationNotice {
@@ -349,16 +355,19 @@ struct MyProfileView: View {
 
     private func integrationButton(title: String, source: RunningDataSource) -> some View {
         Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                runningDataSourceRaw = source.rawValue
+            }
             openCompanionApp(for: source)
         } label: {
             Text(title)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(Color.tasukiPrimary)
+                .foregroundColor(selectedRunningDataSource == source ? .white : Color.tasukiPrimary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 10)
                 .background(
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(Color.tasukiSurface)
+                        .fill(selectedRunningDataSource == source ? Color.tasukiAccent : Color.tasukiSurface)
                 )
         }
     }
@@ -376,31 +385,46 @@ struct MyProfileView: View {
     }
 
     private func openCompanionApp(for source: RunningDataSource) {
-        let deepLink: URL?
-        let appStoreURL: URL?
-        switch source {
-        case .garmin:
-            deepLink = URL(string: "garminconnect://")
-            appStoreURL = URL(string: "https://apps.apple.com/jp/app/garmin-connect-mobile/id583446403")
-        case .suunto:
-            deepLink = URL(string: "suuntoapp://")
-            appStoreURL = URL(string: "https://apps.apple.com/jp/app/suunto/id1187259981")
-        default:
-            deepLink = nil
-            appStoreURL = nil
+        if source == .appleHealth {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                integrationNotice = "Apple Health を取得元に設定しました"
+            }
+            return
         }
 
-        guard let deepLink, let appStoreURL else { return }
-        openURL(deepLink) { accepted in
+        let links = source.deepLinks
+        guard !links.isEmpty else {
             withAnimation(.easeInOut(duration: 0.2)) {
-                if accepted {
-                    integrationNotice = "\(source.displayName) を開きました"
+                integrationNotice = "\(source.displayName) の起動リンクが未設定です"
+            }
+            return
+        }
+
+        func tryOpen(_ index: Int) {
+            if index >= links.count {
+                if let appStore = source.appStoreURL {
+                    openURL(appStore)
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        integrationNotice = "\(source.displayName) アプリが未インストールのためApp Storeを開きました"
+                    }
                 } else {
-                    openURL(appStoreURL)
-                    integrationNotice = "\(source.displayName) アプリが未インストールのためApp Storeを開きました"
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        integrationNotice = "\(source.displayName) を開けませんでした"
+                    }
+                }
+                return
+            }
+            openURL(links[index]) { accepted in
+                if accepted {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        integrationNotice = "\(source.displayName) を開きました"
+                    }
+                } else {
+                    tryOpen(index + 1)
                 }
             }
         }
+        tryOpen(0)
     }
 }
 

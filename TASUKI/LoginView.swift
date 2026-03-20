@@ -83,6 +83,9 @@ struct LoginView: View {
                     .disabled(authManager.isLoading)
                 }
                 .padding(.horizontal, 24)
+
+                socialLoginSection
+                    .padding(.horizontal, 24)
                 
                 Spacer()
             }
@@ -126,6 +129,62 @@ struct LoginView: View {
             return
         }
         authManager.signUp(email: email, password: password) { result in
+            switch result {
+            case .success:
+                break
+            case .failure:
+                errorMessage = authManager.errorMessage
+                showError = true
+            }
+        }
+    }
+
+    private var socialLoginSection: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 8) {
+                Rectangle()
+                    .fill(Color.gray.opacity(0.2))
+                    .frame(height: 1)
+                Text("または")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                Rectangle()
+                    .fill(Color.gray.opacity(0.2))
+                    .frame(height: 1)
+            }
+
+            socialButton(provider: .apple, icon: "apple.logo")
+            socialButton(provider: .line, icon: "message.fill")
+            socialButton(provider: .google, icon: "globe")
+            socialButton(provider: .facebook, icon: "person.crop.square.fill")
+        }
+    }
+
+    private func socialButton(provider: SocialAuthProvider, icon: String) -> some View {
+        Button {
+            handleSocialSignIn(provider)
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.system(size: 16, weight: .semibold))
+                    .frame(width: 20)
+                Text(provider.displayName)
+                    .font(.system(size: 15, weight: .semibold))
+                Spacer()
+            }
+            .foregroundColor(Color(hex: "0F1A2E"))
+            .padding(.vertical, 12)
+            .padding(.horizontal, 14)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(hex: "F5F7FA"))
+            )
+        }
+        .disabled(authManager.isLoading)
+    }
+
+    private func handleSocialSignIn(_ provider: SocialAuthProvider) {
+        authManager.signIn(with: provider) { result in
             switch result {
             case .success:
                 break

@@ -4,10 +4,13 @@ import PhotosUI
 
 struct ProfileRegistrationView: View {
     @Environment(\.dismiss) var dismiss
+    @Environment(\.openURL) private var openURL
     
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var userManager: UserManager
     @AppStorage("skipProfileRegistration") private var skipProfileRegistration: Bool = false
+    @AppStorage("runningDataSource") private var runningDataSourceRaw: String = RunningDataSource.all.rawValue
+    @AppStorage("connectedRunningDevices") private var connectedRunningDevicesRaw: String = ""
     
     // 完了時のコールバック
     var onComplete: (() -> Void)? = nil
@@ -23,6 +26,8 @@ struct ProfileRegistrationView: View {
     @State private var selectedRunCategory: String? = nil  // ビギナー, 5k, 10k, ハーフ, フル
     @State private var runMinutes: String = ""            // カテゴリがビギナー以外のときの所要時間（分）
     @State private var selectedPurposes: [String] = []
+    @State private var selectedDeviceSources: Set<RunningDataSource> = []
+    @State private var integrationNotice: String?
     
     // ステップ管理
     @State private var currentStep: Int = 0
@@ -42,9 +47,13 @@ struct ProfileRegistrationView: View {
     // よく走るエリアの候補（予測用）
     private let areaSuggestions = ["皇居", "代々木公園", "駒沢公園", "多摩川", "大阪城公園", "中之島公園", "大濠公園", "名古屋城", "みなとみらい"]
     
-    private var totalSteps: Int { 10 }
+    private var totalSteps: Int { 11 }
     private var progress: CGFloat {
         CGFloat(currentStep + 1) / CGFloat(totalSteps)
+    }
+
+    private var availableDeviceSources: [RunningDataSource] {
+        RunningDataSource.allCases.filter { $0 != .all }
     }
     
     var body: some View {
@@ -124,6 +133,13 @@ struct ProfileRegistrationView: View {
                                 Image(systemName: "chevron.left")
                             }
                         }
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            if currentStep == 10 {
+                                Button("スキップ") {
+                                    handleNext()
+                                }
+                            }
+                        }
                     }
                     .onTapGesture {
                         hideKeyboard()
@@ -136,6 +152,21 @@ struct ProfileRegistrationView: View {
                         }
                     } message: {
                         Text("プロフィールを登録せずにアプリを利用します。一部機能が制限される場合があります。")
+                    }
+                    .onAppear {
+                        var initial = Set<RunningDataSource>()
+                        let stored = connectedRunningDevicesRaw
+                            .split(separator: ",")
+                            .map { String($0) }
+                        for raw in stored {
+                            if let source = RunningDataSource(rawValue: raw) {
+                                initial.insert(source)
+                            }
+                        }
+                        if let selected = RunningDataSource(rawValue: runningDataSourceRaw), selected != .all {
+                            initial.insert(selected)
+                        }
+                        selectedDeviceSources = initial
                     }
         }
     }
@@ -182,6 +213,8 @@ struct ProfileRegistrationView: View {
             return true
         case 9:
             return !selectedPurposes.isEmpty
+        case 10:
+            return true
         default:
             return false
         }
@@ -304,6 +337,38 @@ struct ProfileRegistrationView: View {
                         selectableChip(title: purpose, isSelected: isSelected) {
                             togglePurpose(purpose)
                         }
+                    }
+                }
+            case 10:
+                questionTitle("ウェアラブルデバイスを接続しますか？")
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("後から設定可能です。連携するサービスを選んでアプリを開き、Appleヘルス同期を有効にしてください。")
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+                    let columns = [GridItem(.adaptive(minimum: 120), spacing: 10)]
+                    LazyVGrid(columns: columns, spacing: 10) {
+                        ForEach(availableDeviceSources) { source in
+                            Button {
+                                toggleDeviceSource(source)
+                                openCompanionAppForRegistration(source)
+                            } label: {
+                                Text(source.displayName)
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundColor(selectedDeviceSources.contains(source) ? .white : Color(hex: "0F1A2E"))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 12)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .fill(selectedDeviceSources.contains(source) ? Color(hex: "0F1A2E") : Color.gray.opacity(0.12))
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    if let integrationNotice {
+                        Text(integrationNotice)
+                            .font(.footnote)
+                            .foregroundColor(Color(hex: "2E5CFF"))
                     }
                 }
             default:
@@ -519,6 +584,46 @@ struct ProfileRegistrationView: View {
             selectedPurposes.append(purpose)
         }
     }
+
+    private func toggleDeviceSource(_ source: RunningDataSource) {
+        if selectedDeviceSources.contains(source) {
+            selectedDeviceSources.remove(source)
+        } else {
+            selectedDeviceSources.insert(source)
+        }
+    }
+
+    private func openCompanionAppForRegistration(_ source: RunningDataSource) {
+        if source == .appleHealth {
+            integrationNotice = "Apple Health を接続対象に追加しました"
+            return
+        }
+        let links = source.deepLinks
+        guard !links.isEmpty else {
+            integrationNotice = "\(source.displayName) の起動リンクが未設定です"
+            return
+        }
+
+        func tryOpen(_ index: Int) {
+            if index >= links.count {
+                if let appStore = source.appStoreURL {
+                    openURL(appStore)
+                    integrationNotice = "\(source.displayName) アプリが未インストールのためApp Storeを開きました"
+                } else {
+                    integrationNotice = "\(source.displayName) を開けませんでした"
+                }
+                return
+            }
+            openURL(links[index]) { accepted in
+                if accepted {
+                    integrationNotice = "\(source.displayName) を開きました"
+                } else {
+                    tryOpen(index + 1)
+                }
+            }
+        }
+        tryOpen(0)
+    }
     
     /// 登録タイムからランク（S,A,B,C,D,E）を算出
     ///
@@ -647,6 +752,7 @@ struct ProfileRegistrationView: View {
             saveErrorMessage = "プロフィール写真を選択してください。"
             return
         }
+        persistSelectedDevices()
         
         isSaving = true
         saveErrorMessage = nil
@@ -776,6 +882,20 @@ struct ProfileRegistrationView: View {
                     }
                 }
             }
+        }
+    }
+
+    private func persistSelectedDevices() {
+        let sorted = selectedDeviceSources
+            .filter { $0 != .all }
+            .sorted { $0.rawValue < $1.rawValue }
+        connectedRunningDevicesRaw = sorted.map(\.rawValue).joined(separator: ",")
+        if let current = RunningDataSource(rawValue: runningDataSourceRaw), sorted.contains(current) {
+            runningDataSourceRaw = current.rawValue
+        } else if let first = sorted.first {
+            runningDataSourceRaw = first.rawValue
+        } else {
+            runningDataSourceRaw = RunningDataSource.all.rawValue
         }
     }
 }

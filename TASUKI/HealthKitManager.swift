@@ -5,18 +5,28 @@ import CoreLocation
 /// ランニングデータ取得元
 enum RunningDataSource: String, CaseIterable, Identifiable {
     case all = "all"
+    case appleHealth = "apple_health"
     case garmin = "garmin"
     case suunto = "suunto"
-    case appleHealth = "apple_health"
+    case fitbit = "fitbit"
+    case polar = "polar"
+    case coros = "coros"
+    case amazfit = "amazfit"
+    case runkeeper = "runkeeper"
 
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
         case .all: return "すべて"
+        case .appleHealth: return "Apple Health"
         case .garmin: return "Garmin"
         case .suunto: return "Suunto"
-        case .appleHealth: return "Apple Health"
+        case .fitbit: return "Fitbit"
+        case .polar: return "Polar"
+        case .coros: return "COROS"
+        case .amazfit: return "Amazfit"
+        case .runkeeper: return "Runkeeper"
         }
     }
 
@@ -24,12 +34,68 @@ enum RunningDataSource: String, CaseIterable, Identifiable {
         switch self {
         case .all:
             return []
+        case .appleHealth:
+            return ["apple", "health", "workout"]
         case .garmin:
-            return ["garmin"]
+            return ["garmin", "connect"]
         case .suunto:
             return ["suunto"]
+        case .fitbit:
+            return ["fitbit"]
+        case .polar:
+            return ["polar", "flow"]
+        case .coros:
+            return ["coros"]
+        case .amazfit:
+            return ["amazfit", "zepp"]
+        case .runkeeper:
+            return ["runkeeper", "asics"]
+        }
+    }
+
+    var deepLinks: [URL] {
+        switch self {
+        case .all:
+            return []
         case .appleHealth:
-            return ["health", "apple"]
+            return [URL(string: "x-apple-health://")].compactMap { $0 }
+        case .garmin:
+            return [URL(string: "garminconnect://")].compactMap { $0 }
+        case .suunto:
+            return [URL(string: "suuntoapp://")].compactMap { $0 }
+        case .fitbit:
+            return [URL(string: "fitbit://")].compactMap { $0 }
+        case .polar:
+            return [URL(string: "polarflow://"), URL(string: "polar://")].compactMap { $0 }
+        case .coros:
+            return [URL(string: "coros://")].compactMap { $0 }
+        case .amazfit:
+            return [URL(string: "zepp://"), URL(string: "amazfit://")].compactMap { $0 }
+        case .runkeeper:
+            return [URL(string: "runkeeper://")].compactMap { $0 }
+        }
+    }
+
+    var appStoreURL: URL? {
+        switch self {
+        case .all:
+            return nil
+        case .appleHealth:
+            return nil
+        case .garmin:
+            return URL(string: "https://apps.apple.com/jp/app/garmin-connect-mobile/id583446403")
+        case .suunto:
+            return URL(string: "https://apps.apple.com/jp/app/suunto/id1187259981")
+        case .fitbit:
+            return URL(string: "https://apps.apple.com/jp/app/fitbit/id462638897")
+        case .polar:
+            return URL(string: "https://apps.apple.com/jp/app/polar-flow/id717172678")
+        case .coros:
+            return URL(string: "https://apps.apple.com/jp/app/coros/id1329207236")
+        case .amazfit:
+            return URL(string: "https://apps.apple.com/jp/app/zepp/id1278618190")
+        case .runkeeper:
+            return URL(string: "https://apps.apple.com/jp/app/asics-runkeeper-run-tracker/id300235330")
         }
     }
 }
