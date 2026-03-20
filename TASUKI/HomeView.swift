@@ -50,6 +50,26 @@ struct HomeView: View {
     private var selectedRunningDataSource: RunningDataSource {
         RunningDataSource(rawValue: runningDataSourceRaw) ?? .all
     }
+
+    private var sameRankUsers: [User] {
+        var users = [mockUser] + mockUsers
+        var me = users[0]
+        me.rank = myRank
+        me.totalPoints = PointService.shared.currentTotalPoints()
+        users[0] = me
+        return users
+            .filter { $0.rank == myRank }
+            .sorted { $0.totalPoints > $1.totalPoints }
+    }
+
+    private var sameRankPosition: Int {
+        guard let idx = sameRankUsers.firstIndex(where: { $0.id == mockUser.id }) else { return 1 }
+        return idx + 1
+    }
+
+    private var sameRankTotal: Int {
+        max(sameRankUsers.count, 1)
+    }
     
     var body: some View {
         ZStack {
@@ -316,7 +336,7 @@ struct HomeView: View {
                 Text("RANKING")
                     .font(.system(size: 13, weight: .bold))
                     .foregroundColor(Color.tasukiPrimary)
-                Text("総合ランキングへ移動 · 現在 \(myRank)")
+                Text("総合ランキングへ移動 · 現在 \(myRank) · 同ランク \(sameRankPosition)位/\(sameRankTotal)人")
                     .font(.caption)
                     .foregroundColor(Color.tasukiMutedText)
             }

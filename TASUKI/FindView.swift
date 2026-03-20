@@ -689,6 +689,13 @@ struct FindView: View {
                             Image(systemName: "arrow.up.arrow.down")
                                 .foregroundColor(Color.tasukiPrimary)
                         }
+                    } else {
+                        Button {
+                            showRecruitmentSheet = true
+                        } label: {
+                            Image(systemName: "plus")
+                                .foregroundColor(Color.tasukiPrimary)
+                        }
                     }
                 }
             }
@@ -746,25 +753,6 @@ struct FindView: View {
                     // Models.swiftで定義されたmockUsersを参照（型を明示して確実に参照）
                     // ローカルのpartnerMockUsersは[PartnerUser]型なので、[User]型のmockUsersはModels.swiftのものを参照
                     matchingUsers = mockUsers as [User]
-                }
-            }
-            .overlay(alignment: .bottomTrailing) {
-                // 新規募集ボタン（Practicesモードの時だけ表示）
-                if selectedMode == "Practices" {
-                    Button(action: {
-                        showRecruitmentSheet = true
-                    }) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 56, weight: .regular))
-                            .foregroundColor(.white)
-                            .background(
-                                Circle()
-                                    .fill(Color.tasukiAccentOrange)
-                                    .frame(width: 56, height: 56)
-                            )
-                    }
-                    .padding(.trailing, 20)
-                    .padding(.bottom, 20)
                 }
             }
             .sheet(isPresented: $showRecruitmentSheet) {
