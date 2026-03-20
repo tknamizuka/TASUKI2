@@ -6,6 +6,8 @@
 //
 
 import SwiftUI
+import MapKit
+import Combine
 
 // MARK: - エントリ（距離選択 → マッチング）
 struct TimeTrialEntryView: View {
@@ -117,7 +119,15 @@ struct TimeTrialRoomView: View {
     @State private var healthKitWorkouts: [RunningWorkoutInfo] = []
     @State private var healthKitLoading = false
     @State private var healthKitError: String?
+    @State private var showRecorder = false
+    @ObservedObject private var tracker = RunTracker.shared
+    @ObservedObject private var activityStore = RunActivityStore.shared
+    @State private var recorderNow = Date()
+    @State private var recorderTargetSplitSeconds: Double?
+    @State private var recorderPreviousDistanceKm: Double = 0
+    @State private var recorderPreviousElapsedSeconds: Double = 0
     @AppStorage("runningDataSource") private var runningDataSourceRaw: String = RunningDataSource.all.rawValue
+    private let recorderTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     
     private var myParticipant: TimeTrialParticipant? {
         manager.participants.first { $0.id == manager.currentUserId }
@@ -129,6 +139,39 @@ struct TimeTrialRoomView: View {
 
     private var selectedRunningDataSource: RunningDataSource {
         RunningDataSource(rawValue: runningDataSourceRaw) ?? .all
+    }
+
+    private var recorderElapsedSeconds: TimeInterval {
+        tracker.elapsedSeconds(now: recorderNow)
+    }
+
+    private var recorderAverageSpeedKmh: Double {
+        guard recorderElapsedSeconds > 0 else { return 0 }
+        return tracker.distanceKm / (recorderElapsedSeconds / 3600.0)
+    }
+
+    private var recorderRouteCoordinates: [CLLocationCoordinate2D] {
+        tracker.routeCoordinates
+    }
+
+    private var recorderMapRegion: MKCoordinateRegion {
+        guard let first = recorderRouteCoordinates.first else {
+            return MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: 35.68, longitude: 139.76),
+                span: MKCoordinateSpan(latitudeDelta: 0.02, longitudeDelta: 0.02)
+            )
+        }
+        let lats = recorderRouteCoordinates.map(\.latitude)
+        let lons = recorderRouteCoordinates.map(\.longitude)
+        let center = CLLocationCoordinate2D(
+            latitude: (lats.min()! + lats.max()!) / 2,
+            longitude: (lons.min()! + lons.max()!) / 2
+        )
+        let span = MKCoordinateSpan(
+            latitudeDelta: max((lats.max()! - lats.min()!) * 1.5, 0.008),
+            longitudeDelta: max((lons.max()! - lons.min()!) * 1.5, 0.008)
+        )
+        return MKCoordinateRegion(center: center, span: span)
     }
     
     var body: some View {
@@ -284,6 +327,21 @@ struct TimeTrialRoomView: View {
                 .foregroundColor(Color.tasukiPrimary)
                 .padding(.top, 24)
             Button(action: {
+                showRecorder = true
+            }) {
+                HStack {
+                    Image(systemName: "map.fill")
+                    Text("アプリで記録する（地図/GPS）")
+                }
+                .font(.headline)
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color.tasukiPrimary)
+                .cornerRadius(12)
+            }
+            .padding(.horizontal, 24)
+            Button(action: {
                 HealthKitManager.shared.requestAuthorization { success, _ in
                     if success {
                         recordSource = .healthKit
@@ -307,6 +365,13 @@ struct TimeTrialRoomView: View {
             }
             .padding(.horizontal, 24)
             Spacer()
+        }
+        .fullScreenCover(isPresented: $showRecorder) {
+            recorderView(room: room)
+                .onReceive(recorderTimer) { recorderNow = $0 }
+                .onChange(of: tracker.distanceKm) { _, newDistanceKm in
+                    updateTargetSplitIfNeeded(room: room, newDistanceKm: newDistanceKm)
+                }
         }
     }
     
@@ -456,6 +521,217 @@ struct TimeTrialRoomView: View {
                 submitError = e.localizedDescription
             }
         }
+    }
+
+    private func recorderView(room: TimeTrialRoom?) -> some View {
+        ZStack {
+            Color.tasukiDarkBackground.ignoresSafeArea()
+            if tracker.isTracking {
+                VStack(spacing: 0) {
+                    VStack(spacing: 2) {
+                        Text("自動停止")
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundColor(Color.tasukiPrimary)
+                        Text(formatDuration(recorderElapsedSeconds))
+                            .font(.system(size: 54, weight: .heavy, design: .rounded))
+                            .foregroundColor(Color.tasukiPrimary)
+                            .monospacedDigit()
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 16)
+                    .padding(.bottom, 14)
+                    .background(Color.tasukiSurface)
+
+                    Spacer(minLength: 16)
+
+                    Text(String(format: "%.1f", recorderAverageSpeedKmh))
+                        .font(.system(size: 110, weight: .heavy, design: .rounded))
+                        .foregroundColor(Color.tasukiPrimary)
+                        .monospacedDigit()
+                        .minimumScaleFactor(0.6)
+                    Text("平均速度 (km/時)")
+                        .font(.system(size: 28, weight: .semibold))
+                        .foregroundColor(Color.tasukiMutedText)
+
+                    Spacer(minLength: 18)
+
+                    HStack(spacing: 16) {
+                        recorderValueCard(value: String(format: "%.2f", tracker.distanceKm), title: "距離 (km)")
+                        recorderValueCard(value: String(format: "%.0f", tracker.elevationGainMeters), title: "獲得標高 (m)")
+                    }
+                    recorderValueCard(value: String(format: "%.0f", tracker.currentAltitudeMeters), title: "現在の標高 (m)")
+                        .padding(.top, 6)
+
+                    Spacer()
+
+                    HStack(spacing: 14) {
+                        Button {
+                            if tracker.isPaused {
+                                tracker.resume()
+                            } else {
+                                tracker.pause()
+                            }
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: tracker.isPaused ? "play.fill" : "pause.fill")
+                                Text(tracker.isPaused ? "再開" : "一時停止")
+                            }
+                            .font(.system(size: 23, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 18)
+                            .background(Capsule().fill(Color.tasukiAccentOrange))
+                        }
+                        .buttonStyle(.plain)
+
+                        Button {
+                            finishRecorderAndSubmit(room: room)
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "flag.checkered")
+                                Text("終了して提出")
+                            }
+                            .font(.system(size: 23, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 18)
+                            .background(Capsule().fill(Color.tasukiPrimary))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 24)
+                }
+            } else {
+                VStack(spacing: 14) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("アプリ記録")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundColor(Color.tasukiMutedText)
+                            .tracking(1.5)
+                        Text("地図でルート確認しながら記録")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(Color.tasukiPrimary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .tasukiCard()
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("ルート")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(Color.tasukiPrimary)
+                        Map(initialPosition: .region(recorderMapRegion), interactionModes: .all) {
+                            if recorderRouteCoordinates.count >= 2 {
+                                MapPolyline(coordinates: recorderRouteCoordinates)
+                                    .stroke(Color.tasukiAccent, lineWidth: 4)
+                            }
+                        }
+                        .frame(height: 260)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                    }
+                    .tasukiCard()
+
+                    Button {
+                        tracker.start()
+                        recorderNow = Date()
+                        recorderTargetSplitSeconds = nil
+                        recorderPreviousDistanceKm = 0
+                        recorderPreviousElapsedSeconds = 0
+                    } label: {
+                        Text("ランニングを記録する")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(RoundedRectangle(cornerRadius: 12).fill(Color.tasukiPrimary))
+                    }
+                    .buttonStyle(.plain)
+                    .tasukiCard()
+
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+        }
+    }
+
+    private func finishRecorderAndSubmit(room: TimeTrialRoom?) {
+        tracker.stop()
+        guard let room else { return }
+        let targetKm = room.distanceKm
+        if tracker.distanceKm < targetKm {
+            submitError = "目標距離\(targetKm.clean)km以上を走ると提出できます（現在 \(String(format: "%.2f", tracker.distanceKm))km）"
+            return
+        }
+        let elapsed = max(recorderElapsedSeconds, 1)
+        let splitAtTarget: Double = {
+            if let split = recorderTargetSplitSeconds {
+                return split
+            }
+            let ratio = targetKm / max(tracker.distanceKm, 0.001)
+            return max(1, elapsed * ratio)
+        }()
+        _ = activityStore.addActivity(
+            distanceKm: tracker.distanceKm,
+            durationSeconds: elapsed,
+            routeCoordinates: tracker.routeCoordinates,
+            source: "time_trial_recorder"
+        )
+        tracker.reset()
+        submitTimeWithSeconds(splitAtTarget)
+        recorderTargetSplitSeconds = nil
+        showRecorder = false
+        showSubmitSheet = false
+    }
+
+    private func updateTargetSplitIfNeeded(room: TimeTrialRoom?, newDistanceKm: Double) {
+        guard let room else { return }
+        guard recorderTargetSplitSeconds == nil else {
+            recorderPreviousDistanceKm = newDistanceKm
+            recorderPreviousElapsedSeconds = recorderElapsedSeconds
+            return
+        }
+        let targetKm = room.distanceKm
+        let currentElapsed = recorderElapsedSeconds
+        let prevDist = recorderPreviousDistanceKm
+        let prevElapsed = recorderPreviousElapsedSeconds
+
+        if newDistanceKm >= targetKm, prevDist < targetKm, newDistanceKm > prevDist {
+            let fraction = (targetKm - prevDist) / (newDistanceKm - prevDist)
+            let interpolated = prevElapsed + max(0, min(1, fraction)) * (currentElapsed - prevElapsed)
+            recorderTargetSplitSeconds = max(1, interpolated)
+        }
+
+        recorderPreviousDistanceKm = newDistanceKm
+        recorderPreviousElapsedSeconds = currentElapsed
+    }
+
+    private func recorderValueCard(value: String, title: String) -> some View {
+        VStack(spacing: 2) {
+            Text(value)
+                .font(.system(size: 58, weight: .heavy, design: .rounded))
+                .foregroundColor(Color.tasukiPrimary)
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.55)
+            Text(title)
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundColor(Color.tasukiMutedText)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func formatDuration(_ sec: TimeInterval) -> String {
+        let total = Int(sec)
+        let h = total / 3600
+        let m = (total % 3600) / 60
+        let s = total % 60
+        if h > 0 {
+            return String(format: "%d:%02d:%02d", h, m, s)
+        }
+        return String(format: "%02d:%02d", m, s)
     }
     
     private var rankingSheet: some View {

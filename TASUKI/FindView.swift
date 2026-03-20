@@ -38,8 +38,7 @@ struct FindView: View {
     @State private var sortOption: SortOption = .recommend
     
     // フィルター用のState
-    @State private var selectedRunnerFilter: String = "すべて"
-    @State private var selectedPracticeFilter: String = "すべて" // 旧ロジック互換用（UI表示のみ）
+    @State private var selectedRunnerRanks: Set<String> = []
     @State private var selectedPracticeCategory: PracticeCategory? = nil
     
     // 詳細フィルター用のState
@@ -47,7 +46,6 @@ struct FindView: View {
     @State private var filterAgeGroup: String = "指定なし"
     @State private var filterAgeMin: Int = 20
     @State private var filterAgeMax: Int = 80
-    @State private var filterRankMode: String = "すべて"  // すべて / 自分より上のみ / 自分と同じ以上 / 自分より下のみ
     @State private var filterActiveTime: String = "指定なし"
     @State private var filterRunningGoal: String = "指定なし"
     @State private var filterPersonalBest: String = "指定なし"
@@ -66,12 +64,6 @@ struct FindView: View {
     @State private var practiceFilterDate: Date? = nil  // 日時で絞り込む（nil=指定なし）
     @State private var practiceFilterSpot: String = ""
     @State private var practiceFilterCapacity: String = "指定なし"
-    
-    // Runnersモード用のフィルター項目
-    private let runnerFilters = ["すべて", "Rank S", "Rank A", "Rank B", "Rank C", "エリア未設定"]
-    
-    // Practicesモード用のフィルター項目（カテゴリー）
-    private let practiceFilters: [PracticeCategory] = PracticeCategory.allCases
     
     // ダミーデータ（PartnerViewと同じ）
     @State private var partnerMockUsers: [PartnerUser] = [
@@ -335,6 +327,10 @@ struct FindView: View {
     // フィルタリング＆ソートされたユーザーリスト
     private var filteredUsers: [User] {
         var filtered = matchingUsers
+
+        if !selectedRunnerRanks.isEmpty {
+            filtered = filtered.filter { selectedRunnerRanks.contains($0.rank) }
+        }
         
         // 検索テキストフィルター
         if !searchText.isEmpty {
@@ -376,34 +372,13 @@ struct FindView: View {
     private var filteredPartnerUsers: [PartnerUser] {
         var filtered = partnerMockUsers
         
-        // ランクフィルター
-        if selectedRunnerFilter != "すべて" {
-            if selectedRunnerFilter == "エリア未設定" {
-                // エリア未設定の場合は、runningSpotsが空のユーザーを表示
-                filtered = filtered.filter { $0.runningSpots.isEmpty }
-            } else {
-                let rank = selectedRunnerFilter.replacingOccurrences(of: "Rank ", with: "")
-                filtered = filtered.filter { $0.rank == rank }
-            }
+        if !selectedRunnerRanks.isEmpty {
+            filtered = filtered.filter { selectedRunnerRanks.contains("Rank \($0.rank)") }
         }
         
         // 詳細フィルター適用
         if filterPrefecture != "指定なし" {
             filtered = filtered.filter { $0.prefecture.contains(filterPrefecture) }
-        }
-        
-        // ランク階層フィルター（自分より上/同じ以上/下のみ）
-        if filterRankMode != "すべて" {
-            let myRankIndex = rankOrderIndex(myRank)
-            filtered = filtered.filter { user in
-                let userIndex = rankOrderIndex("Rank \(user.rank)")
-                switch filterRankMode {
-                case "自分より上のみ": return userIndex < myRankIndex
-                case "自分と同じ以上": return userIndex <= myRankIndex
-                case "自分より下のみ": return userIndex > myRankIndex
-                default: return true
-                }
-            }
         }
         
         // 年齢範囲フィルター（20〜80）
@@ -594,45 +569,6 @@ struct FindView: View {
                     .buttonStyle(.plain)
                     .padding(.horizontal, 16)
                     
-                    // 4. クイックフィルター（横スクロール）
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 12) {
-                            if selectedMode == "Runners" {
-                                ForEach(runnerFilters, id: \.self) { filter in
-                                    filterButton(
-                                        title: filter,
-                                        isSelected: selectedRunnerFilter == filter,
-                                        action: {
-                                            selectedRunnerFilter = filter
-                                        }
-                                    )
-                                }
-                            } else {
-                                // Practices: カテゴリフィルタ
-                                filterButton(
-                                    title: "すべて",
-                                    isSelected: selectedPracticeCategory == nil,
-                                    action: {
-                                        selectedPracticeCategory = nil
-                                        selectedPracticeFilter = "すべて"
-                                    }
-                                )
-                                
-                                ForEach(practiceFilters, id: \.self) { category in
-                                    filterButton(
-                                        title: category.rawValue,
-                                        isSelected: selectedPracticeCategory == category,
-                                        action: {
-                                            selectedPracticeCategory = category
-                                            selectedPracticeFilter = category.rawValue
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                    }
-                    
                     // 5. リスト表示エリア
                     ScrollView {
                         LazyVStack(spacing: 12) {
@@ -689,13 +625,6 @@ struct FindView: View {
                             Image(systemName: "arrow.up.arrow.down")
                                 .foregroundColor(Color.tasukiPrimary)
                         }
-                    } else {
-                        Button {
-                            showRecruitmentSheet = true
-                        } label: {
-                            Image(systemName: "plus")
-                                .foregroundColor(Color.tasukiPrimary)
-                        }
                     }
                 }
             }
@@ -703,11 +632,11 @@ struct FindView: View {
                 FilterDetailSheet(
                     searchText: $searchText,
                     selectedMode: selectedMode,
+                    selectedRunnerRanks: $selectedRunnerRanks,
                     prefecture: $filterPrefecture,
                     ageGroup: $filterAgeGroup,
                     ageMin: $filterAgeMin,
                     ageMax: $filterAgeMax,
-                    rankMode: $filterRankMode,
                     activeTime: $filterActiveTime,
                     runningGoal: $filterRunningGoal,
                     personalBest: $filterPersonalBest,
@@ -732,7 +661,7 @@ struct FindView: View {
                         filterAgeGroup = "指定なし"
                         filterAgeMin = 20
                         filterAgeMax = 80
-                        filterRankMode = "すべて"
+                        selectedRunnerRanks = []
                         filterActiveTime = "指定なし"
                         filterRunningGoal = "指定なし"
                         filterPersonalBest = "指定なし"
@@ -753,6 +682,25 @@ struct FindView: View {
                     // Models.swiftで定義されたmockUsersを参照（型を明示して確実に参照）
                     // ローカルのpartnerMockUsersは[PartnerUser]型なので、[User]型のmockUsersはModels.swiftのものを参照
                     matchingUsers = mockUsers as [User]
+                }
+            }
+            .overlay(alignment: .bottomTrailing) {
+                // 新規募集ボタン（Practicesモードの時だけ表示）
+                if selectedMode == "Practices" {
+                    Button(action: {
+                        showRecruitmentSheet = true
+                    }) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 56, weight: .regular))
+                            .foregroundColor(.white)
+                            .background(
+                                Circle()
+                                    .fill(Color.tasukiAccentOrange)
+                                    .frame(width: 56, height: 56)
+                            )
+                    }
+                    .padding(.trailing, 20)
+                    .padding(.bottom, 20)
                 }
             }
             .sheet(isPresented: $showRecruitmentSheet) {
@@ -1455,11 +1403,11 @@ private struct AgeRangeSlider: View {
 struct FilterDetailSheet: View {
     @Binding var searchText: String
     let selectedMode: String
+    @Binding var selectedRunnerRanks: Set<String>
     @Binding var prefecture: String
     @Binding var ageGroup: String
     @Binding var ageMin: Int
     @Binding var ageMax: Int
-    @Binding var rankMode: String
     @Binding var activeTime: String
     @Binding var runningGoal: String
     @Binding var personalBest: String
@@ -1497,9 +1445,9 @@ struct FilterDetailSheet: View {
         "徳島県", "香川県", "愛媛県", "高知県",
         "福岡県", "佐賀県", "長崎県", "熊本県", "大分県", "宮崎県", "鹿児島県", "沖縄県"
     ]
+    private let selectableRanks = ["Rank S", "Rank A", "Rank B", "Rank C", "Rank D", "Rank E"]
     private let ageGroups = ["指定なし", "20代", "30代", "40代", "50代", "60代以上"]
     private let schedules = ["指定なし", "平日 朝", "平日 夜", "土日 朝", "土日 午前", "土日 午後", "土日 夜", "不定期"]
-    private let rankModes = ["すべて", "自分より上のみ", "自分と同じ以上", "自分より下のみ"]
     private let runningGoals = ["指定なし", "ファンラン", "ダイエット", "サブ3", "サブ4", "自己記録更新"]
     private let bestTimes = ["指定なし", "サブ2.5", "サブ3", "サブ3.5", "サブ4", "サブ5", "完走", "未計測"]
     private let bestFullOptions = ["指定なし", "サブ2.5", "サブ3", "サブ3.5", "サブ4", "サブ4.5", "サブ5", "完走", "未計測"]
@@ -1529,13 +1477,31 @@ struct FilterDetailSheet: View {
                 }
                 
                 if selectedMode == "Runners" {
-                    // ランク（階層型）
                     Section(header: Text("ランク")) {
-                        Picker("マッチングするランク", selection: $rankMode) {
-                            ForEach(rankModes, id: \.self) { mode in
-                                Text(mode).tag(mode)
+                        Text("マッチングするランク（複数選択可）")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        ForEach(selectableRanks, id: \.self) { rank in
+                            Button {
+                                if selectedRunnerRanks.contains(rank) {
+                                    selectedRunnerRanks.remove(rank)
+                                } else {
+                                    selectedRunnerRanks.insert(rank)
+                                }
+                            } label: {
+                                HStack {
+                                    Text(rank)
+                                        .foregroundColor(Color(hex: "0F1A2E"))
+                                    Spacer()
+                                    Image(systemName: selectedRunnerRanks.contains(rank) ? "checkmark.circle.fill" : "circle")
+                                        .foregroundColor(selectedRunnerRanks.contains(rank) ? Color(hex: "2E5CFF") : .gray)
+                                }
                             }
+                            .buttonStyle(.plain)
                         }
+                        Text("未選択の場合は全ランクが対象です")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
                         Text("自分のランク: \(myRank)")
                             .font(.caption)
                             .foregroundColor(Color(hex: "0F1A2E").opacity(0.6))
