@@ -18,12 +18,16 @@ struct TeamDetailView: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        VStack(spacing: 16) {
-            if let data = teamData {
+        ZStack {
+            Color.tasukiDarkBackground
+                .ignoresSafeArea()
+
+            VStack(spacing: 16) {
+                if let data = teamData {
                 HStack(alignment: .center, spacing: 12) {
                     Text(data["name"] as? String ?? "Team")
                         .font(.system(size: 22, weight: .bold))
-                        .foregroundColor(Color(hex: "0F1A2E"))
+                        .foregroundColor(Color.tasukiPrimary)
                     let total = (data["teamTotalPoints"] as? Int) ?? PointService.shared.teamTotalPoints(teamId: teamId)
                     let tier = TeamRankTier.tier(forTeamPoints: total)
                     Text(tier.displayName)
@@ -36,10 +40,10 @@ struct TeamDetailView: View {
                     VStack(alignment: .trailing, spacing: 2) {
                         Text("\(total)pt")
                             .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(Color(hex: "0F1A2E"))
+                            .foregroundColor(Color.tasukiPrimary)
                         Text("累計")
                             .font(.system(size: 10))
-                            .foregroundColor(.gray)
+                            .foregroundColor(Color.tasukiMutedText)
                     }
                 }
                 .padding(.horizontal, 20)
@@ -76,11 +80,14 @@ struct TeamDetailView: View {
 
                 if membersInfo.isEmpty {
                     Text("メンバー情報を取得中…")
-                        .foregroundColor(.gray)
+                        .foregroundColor(Color.tasukiMutedText)
                 } else {
                     List(membersInfo, id: \.self) { info in
-                        Text(info)
+                        Text(info).foregroundColor(Color.tasukiPrimary)
+                            .listRowBackground(Color.tasukiDarkCard)
                     }
+                    .scrollContentBackground(.hidden)
+                    .background(Color.tasukiDarkBackground)
                 }
 
                 // 参加ボタン（自分がメンバーでもオーナーでもない場合のみ）
@@ -96,14 +103,15 @@ struct TeamDetailView: View {
                             Spacer()
                         }
                         .padding()
-                        .background(RoundedRectangle(cornerRadius: 12).fill(Color(hex: "2E5CFF")))
+                        .background(RoundedRectangle(cornerRadius: 12).fill(Color.tasukiAccentOrange))
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 16)
                 }
             } else {
                 Text("チーム情報を読み込み中…")
-                    .foregroundColor(.gray)
+                    .foregroundColor(Color.tasukiMutedText)
+            }
             }
         }
         .navigationTitle("チーム詳細")
@@ -111,7 +119,7 @@ struct TeamDetailView: View {
             if let currentUid = effectiveCurrentUid, ownerUid == currentUid {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     NavigationLink(destination: TeamManageView(teamId: teamId)) {
-                        Text("参加申請")
+                        Text("参加申請").foregroundColor(Color.tasukiPrimary)
                     }
                 }
             }

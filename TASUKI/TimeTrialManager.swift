@@ -270,17 +270,14 @@ final class TimeTrialManager: ObservableObject {
                     entries: entries,
                     myUserId: self.currentUserId
                 )
-                // 自分のポイント加算（同じ部屋で二重加算されないように UserDefaults でガード）
-                if let myId = self.currentUserId,
+                // 本番は Cloud Functions でポイント付与。サンプル部屋のみクライアント側で加算する。
+                if self.isSampleRoom(roomId),
+                   let myId = self.currentUserId,
                    let myEntry = entries.first(where: { $0.id == myId }) {
-                    let points = myEntry.points
-                    if points > 0 {
-                        let key = "timeTrialPointsAwarded_\(roomId)"
-                        let alreadyAwarded = UserDefaults.standard.bool(forKey: key)
-                        if !alreadyAwarded {
-                            PointService.shared.addPointsToCurrentUser(amount: points)
-                            UserDefaults.standard.set(true, forKey: key)
-                        }
+                    let key = "timeTrialPointsAwarded_\(roomId)"
+                    if !UserDefaults.standard.bool(forKey: key), myEntry.points > 0 {
+                        PointService.shared.addPointsToCurrentUser(amount: myEntry.points)
+                        UserDefaults.standard.set(true, forKey: key)
                     }
                 }
                 completion(.success(entries))

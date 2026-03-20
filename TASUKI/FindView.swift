@@ -558,8 +558,7 @@ struct FindView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                // 背景色: White
-                Color.white
+                Color.tasukiDarkBackground
                     .ignoresSafeArea()
                 
                 VStack(spacing: 12) {
@@ -576,12 +575,12 @@ struct FindView: View {
                     Button(action: { showFilterSheet = true }) {
                         HStack {
                             Image(systemName: "magnifyingglass")
-                                .foregroundColor(Color(hex: "0F1A2E").opacity(0.5))
+                                .foregroundColor(Color.tasukiMutedText)
                                 .padding(.leading, 12)
                             
                             Text(searchText.isEmpty ? "検索..." : searchText)
                                 .font(.system(size: 16))
-                                .foregroundColor(searchText.isEmpty ? Color(hex: "0F1A2E").opacity(0.5) : Color(hex: "0F1A2E"))
+                                .foregroundColor(searchText.isEmpty ? Color.tasukiMutedText : .white)
                                 .lineLimit(1)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.vertical, 12)
@@ -589,7 +588,7 @@ struct FindView: View {
                         }
                         .background(
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(Color(hex: "F5F7FA"))
+                                .fill(Color.tasukiDarkCard)
                         )
                     }
                     .buttonStyle(.plain)
@@ -657,7 +656,7 @@ struct FindView: View {
                                         .buttonStyle(.plain)
                                         
                                         Divider()
-                                            .background(Color(hex: "E5E7EB"))
+                                            .background(Color.tasukiDarkCardSecondary)
                                     }
                                     .padding(.vertical, 4)
                                 }
@@ -688,7 +687,7 @@ struct FindView: View {
                             }
                         } label: {
                             Image(systemName: "arrow.up.arrow.down")
-                                .foregroundColor(Color(hex: "0F1A2E"))
+                                .foregroundColor(Color.tasukiPrimary)
                         }
                     }
                 }
@@ -760,7 +759,7 @@ struct FindView: View {
                             .foregroundColor(.white)
                             .background(
                                 Circle()
-                                    .fill(Color(hex: "2E5CFF"))
+                                    .fill(Color.tasukiAccentOrange)
                                     .frame(width: 56, height: 56)
                             )
                     }
@@ -866,7 +865,7 @@ struct FindView: View {
                 // プレースホルダー
                 Image(systemName: "person.circle.fill")
                     .font(.system(size: 60))
-                    .foregroundColor(Color(hex: "0F1A2E").opacity(0.2))
+                    .foregroundColor(Color.tasukiMutedText)
                     .frame(width: 60, height: 60)
             }
             
@@ -876,7 +875,7 @@ struct FindView: View {
                 HStack(spacing: 6) {
                     Text(user.name)
                         .font(.system(size: 17, weight: .bold))
-                        .foregroundColor(Color(hex: "0F1A2E"))
+                        .foregroundColor(Color.tasukiPrimary)
                     if let tier = PointBadgeHelper.tier(forTotalPoints: user.totalPoints) {
                         HStack(spacing: 3) {
                             Image(systemName: tier.iconName)
@@ -884,7 +883,7 @@ struct FindView: View {
                                 .foregroundColor(tier.color)
                             Text(tier.displayName)
                                 .font(.system(size: 10, weight: .semibold))
-                                .foregroundColor(Color(hex: "0F1A2E"))
+                                .foregroundColor(Color.tasukiPrimary)
                         }
                         .padding(.horizontal, 5)
                         .padding(.vertical, 2)
@@ -908,23 +907,23 @@ struct FindView: View {
                         .font(.caption)
                         .fontWeight(.semibold)
                 }
-                .foregroundColor(Color(hex: "0F1A2E"))
+                .foregroundColor(Color.tasukiMutedText)
                 
                 // ログイン状況
                 let hoursSinceLogin = Int(Date().timeIntervalSince(user.lastLogin) / 3600)
                 let daysSinceLogin = Int(Date().timeIntervalSince(user.lastLogin) / 86400)
                 Text(user.isOnline ? "オンライン" : (daysSinceLogin > 0 ? "最終ログイン: \(daysSinceLogin)日前" : "最終ログイン: \(hoursSinceLogin)時間前"))
                     .font(.caption)
-                    .foregroundColor(.gray)
+                    .foregroundColor(Color.tasukiMutedText)
                 
                 // 活動場所と距離
                 HStack(spacing: 4) {
                     Image(systemName: "mappin.and.ellipse")
                         .font(.caption)
-                        .foregroundColor(Color(hex: "0F1A2E").opacity(0.7))
+                        .foregroundColor(Color.tasukiMutedText)
                     Text(user.spotName)
                     Text("(\(String(format: "%.1f", user.distanceFromUserMock))km)")
-                        .foregroundColor(.gray)
+                        .foregroundColor(Color.tasukiMutedText)
                 }
                 .font(.caption)
                 
@@ -932,12 +931,12 @@ struct FindView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "speedometer")
                         .font(.caption)
-                        .foregroundColor(Color(hex: "0F1A2E"))
+                        .foregroundColor(Color.tasukiAccentOrange)
                     Text(user.pace)
                 }
                 .font(.caption)
                 .fontWeight(.semibold)
-                .foregroundColor(Color(hex: "0F1A2E"))
+                .foregroundColor(Color.tasukiPrimary)
             }
             
             Spacer()
@@ -946,8 +945,7 @@ struct FindView: View {
         .padding(.vertical, 16)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color.white)
-                .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
+                .fill(Color.tasukiDarkCard)
         )
     }
     
@@ -958,12 +956,12 @@ struct FindView: View {
             if let avatarImage = user.avatarImage {
                 Image(systemName: avatarImage)
                     .font(.system(size: 48))
-                    .foregroundColor(Color(hex: "0F1A2E"))
+                    .foregroundColor(Color.tasukiPrimary)
                     .saturation(0)
                     .frame(width: 56, height: 56)
             } else {
                 Circle()
-                    .fill(Color(hex: "F5F7FA"))
+                    .fill(Color.tasukiDarkCardSecondary)
                     .frame(width: 56, height: 56)
             }
             
@@ -972,7 +970,7 @@ struct FindView: View {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(user.name)
                         .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(Color(hex: "0F1A2E"))
+                        .foregroundColor(Color.tasukiPrimary)
                     if let tier = PointBadgeHelper.tier(forTotalPoints: user.totalPoints) {
                         Image(systemName: tier.iconName)
                             .font(.system(size: 12, weight: .semibold))
@@ -980,12 +978,12 @@ struct FindView: View {
                     }
                     Text("Rank \(user.rank)")
                         .font(.system(size: 12, weight: .regular))
-                        .foregroundColor(Color(hex: "0F1A2E").opacity(0.7))
+                        .foregroundColor(Color.tasukiMutedText)
                 }
                 
                 Text(user.statusMessage)
                     .font(.system(size: 14, weight: .regular))
-                    .foregroundColor(Color(hex: "0F1A2E").opacity(0.7))
+                    .foregroundColor(Color.tasukiMutedText)
                     .lineLimit(1)
             }
             
@@ -993,15 +991,14 @@ struct FindView: View {
             
             // ステータスインジケーター
             Circle()
-                .fill(user.isOnline ? Color(hex: "2E5CFF") : Color.gray.opacity(0.5))
+                .fill(user.isOnline ? Color.tasukiAccentOrange : Color.gray.opacity(0.5))
                 .frame(width: 8, height: 8)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 16)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color.white)
-                .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
+                .fill(Color.tasukiDarkCard)
         )
     }
     
@@ -1022,7 +1019,7 @@ struct FindView: View {
                 
                 Text(recruitment.title)
                     .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(Color(hex: "0F1A2E"))
+                    .foregroundColor(Color.tasukiPrimary)
                     .lineLimit(2)
             }
             
@@ -1039,7 +1036,7 @@ struct FindView: View {
                     Text("定員\(recruitment.maxParticipants)名")
                 }
                 .font(.system(size: 12, weight: .regular))
-                .foregroundColor(Color(hex: "0F1A2E").opacity(0.7))
+                .foregroundColor(Color.tasukiMutedText)
                 
                 // ペース・距離
                 HStack(spacing: 12) {
@@ -1055,19 +1052,19 @@ struct FindView: View {
                     }
                 }
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(Color(hex: "2E5CFF"))
+                .foregroundColor(Color.tasukiAccentOrange)
             }
             
             // 区切り
             VStack(alignment: .leading, spacing: 8) {
                 Divider()
-                    .background(Color(hex: "F5F7FA"))
+                    .background(Color.tasukiDarkCardSecondary)
             }
             
             // 詳細
             Text(recruitment.description)
                 .font(.system(size: 14, weight: .regular))
-                .foregroundColor(Color(hex: "0F1A2E").opacity(0.8))
+                .foregroundColor(Color.tasukiMutedText)
                 .lineLimit(3)
             
             // 募集主
@@ -1075,27 +1072,26 @@ struct FindView: View {
                 if let avatarImage = recruitment.host.avatarImage {
                     Image(systemName: avatarImage)
                         .font(.system(size: 20))
-                        .foregroundColor(Color(hex: "0F1A2E"))
+                        .foregroundColor(Color.tasukiPrimary)
                         .saturation(0)
                         .frame(width: 24, height: 24)
                 }
                 
                 Text("募集主: \(recruitment.host.name)")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(Color(hex: "0F1A2E").opacity(0.7))
+                    .foregroundColor(Color.tasukiMutedText)
                 
                 Spacer()
                 
                 Text("\(recruitment.applicants.count)人が参加希望")
                     .font(.system(size: 12, weight: .regular))
-                    .foregroundColor(Color(hex: "2E5CFF"))
+                    .foregroundColor(Color.tasukiAccentOrange)
             }
         }
         .padding(20)
         .background(
             RoundedRectangle(cornerRadius: 18)
-                .fill(Color(hex: "F9FAFB"))
-                .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 3)
+                .fill(Color.tasukiDarkCard)
         )
     }
     
@@ -1104,15 +1100,15 @@ struct FindView: View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(isSelected ? .white : Color(hex: "0F1A2E"))
+                .foregroundColor(isSelected ? .white : Color.tasukiMutedText)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
                 .background(
                     Capsule()
-                        .fill(isSelected ? Color(hex: "0F1A2E") : Color.clear)
+                        .fill(isSelected ? Color.tasukiAccentOrange : Color.clear)
                         .overlay(
                             Capsule()
-                                .stroke(isSelected ? Color.clear : Color(hex: "0F1A2E").opacity(0.3), lineWidth: 1)
+                                .stroke(isSelected ? Color.clear : Color.tasukiDarkCardSecondary, lineWidth: 1)
                         )
                 )
         }
@@ -1155,7 +1151,7 @@ struct RecruitmentPostSheet: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color.white
+                Color.tasukiDarkBackground
                     .ignoresSafeArea()
                 
                 ScrollView {
@@ -1164,16 +1160,16 @@ struct RecruitmentPostSheet: View {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("タイトル")
                                 .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(Color(hex: "0F1A2E"))
+                                .foregroundColor(Color.tasukiPrimary)
                             
                             TextField("例: 来週皇居で20km走！", text: $title)
                                 .font(.system(size: 16))
-                                .foregroundColor(Color(hex: "0F1A2E"))
+                                .foregroundColor(Color.tasukiPrimary)
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 12)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color(hex: "F5F7FA"))
+                                        .fill(Color.tasukiDarkCard)
                                 )
                         }
                         .padding(.horizontal, 20)
@@ -1183,7 +1179,7 @@ struct RecruitmentPostSheet: View {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("開催日時")
                                 .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(Color(hex: "0F1A2E"))
+                                .foregroundColor(Color.tasukiPrimary)
                             
                             Picker("", selection: $isRecurring) {
                                 Text("一度だけ").tag(false)
@@ -1195,7 +1191,7 @@ struct RecruitmentPostSheet: View {
                                 HStack(spacing: 8) {
                                     Text("曜日")
                                         .font(.system(size: 14, weight: .medium))
-                                        .foregroundColor(Color(hex: "0F1A2E"))
+                                        .foregroundColor(Color.tasukiPrimary)
                                     Picker("曜日", selection: $recurringWeekday) {
                                         ForEach(weekdayOptions, id: \.0) { Text($0.1).tag($0.0) }
                                     }
@@ -1204,12 +1200,12 @@ struct RecruitmentPostSheet: View {
                                 }
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 12)
-                                .background(RoundedRectangle(cornerRadius: 12).fill(Color(hex: "F5F7FA")))
+                                .background(RoundedRectangle(cornerRadius: 12).fill(Color.tasukiDarkCard))
                                 
                                 DatePicker("開始時刻", selection: $recurringTime, displayedComponents: .hourAndMinute)
                                     .padding(.horizontal, 16)
                                     .padding(.vertical, 12)
-                                    .background(RoundedRectangle(cornerRadius: 12).fill(Color(hex: "F5F7FA")))
+                                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.tasukiDarkCard))
                             } else {
                                 DatePicker("", selection: $selectedDate, displayedComponents: [.date, .hourAndMinute])
                                     .datePickerStyle(.compact)
@@ -1217,7 +1213,7 @@ struct RecruitmentPostSheet: View {
                                     .padding(.vertical, 12)
                                     .background(
                                         RoundedRectangle(cornerRadius: 12)
-                                            .fill(Color(hex: "F5F7FA"))
+                                            .fill(Color.tasukiDarkCard)
                                     )
                             }
                         }
@@ -1227,16 +1223,16 @@ struct RecruitmentPostSheet: View {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("ペース")
                                 .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(Color(hex: "0F1A2E"))
+                                .foregroundColor(Color.tasukiPrimary)
                             
                             TextField("例: 4:30/km, LSD", text: $pace)
                                 .font(.system(size: 16))
-                                .foregroundColor(Color(hex: "0F1A2E"))
+                                .foregroundColor(Color.tasukiPrimary)
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 12)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color(hex: "F5F7FA"))
+                                        .fill(Color.tasukiDarkCard)
                                 )
                         }
                         .padding(.horizontal, 20)
@@ -1245,16 +1241,16 @@ struct RecruitmentPostSheet: View {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("場所")
                                 .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(Color(hex: "0F1A2E"))
+                                .foregroundColor(Color.tasukiPrimary)
                             
                             TextField("例: 代々木公園", text: $location)
                                 .font(.system(size: 16))
-                                .foregroundColor(Color(hex: "0F1A2E"))
+                                .foregroundColor(Color.tasukiPrimary)
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 12)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color(hex: "F5F7FA"))
+                                        .fill(Color.tasukiDarkCard)
                                 )
                         }
                         .padding(.horizontal, 20)
@@ -1263,16 +1259,16 @@ struct RecruitmentPostSheet: View {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("詳細")
                                 .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(Color(hex: "0F1A2E"))
+                                .foregroundColor(Color.tasukiPrimary)
                             
                             TextEditor(text: $description)
                                 .font(.system(size: 16))
-                                .foregroundColor(Color(hex: "0F1A2E"))
+                                .foregroundColor(Color.tasukiPrimary)
                                 .frame(height: 150)
                                 .padding(12)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color(hex: "F5F7FA"))
+                                        .fill(Color.tasukiDarkCard)
                                 )
                         }
                         .padding(.horizontal, 20)
@@ -1289,7 +1285,7 @@ struct RecruitmentPostSheet: View {
                     Button("キャンセル") {
                         onCancel()
                     }
-                    .foregroundColor(Color(hex: "0F1A2E"))
+                    .foregroundColor(Color.tasukiPrimary)
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -1309,7 +1305,7 @@ struct RecruitmentPostSheet: View {
                             }
                         }
                     }
-                    .foregroundColor(isValid ? Color(hex: "2E5CFF") : Color.gray)
+                    .foregroundColor(isValid ? Color.tasukiAccentOrange : Color.gray)
                     .fontWeight(.semibold)
                     .disabled(!isValid)
                 }

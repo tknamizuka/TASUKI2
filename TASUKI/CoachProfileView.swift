@@ -19,7 +19,7 @@ struct CoachProfileView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color.white
+                Color.tasukiDarkBackground
                     .ignoresSafeArea()
                 
                 ScrollView {
@@ -67,7 +67,7 @@ struct CoachProfileView: View {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button(action: { dismiss() }) {
                         Image(systemName: "chevron.left")
-                            .foregroundColor(Color(hex: "0F1A2E"))
+                            .foregroundColor(Color.tasukiPrimary)
                     }
                 }
             }
@@ -105,12 +105,12 @@ struct CoachProfileView: View {
                 }
                 Text("\(coachProfile.rating).0 (\(coachProfile.reviewCount)件)")
                     .font(.system(size: 12, weight: .regular))
-                    .foregroundColor(Color(hex: "0F1A2E").opacity(0.6))
+                    .foregroundColor(Color.tasukiMutedText)
             }
         }
         .padding(.vertical, 32)
         .frame(maxWidth: .infinity)
-        .background(Color(hex: "F5F7FA"))
+        .background(Color.tasukiDarkCard)
     }
     
     // MARK: - Profile Info Section
@@ -119,19 +119,19 @@ struct CoachProfileView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("肩書")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(Color(hex: "0F1A2E").opacity(0.6))
+                    .foregroundColor(Color.tasukiMutedText)
                 Text(coachProfile.title)
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(Color(hex: "0F1A2E"))
+                    .foregroundColor(Color.tasukiPrimary)
             }
             
             VStack(alignment: .leading, spacing: 4) {
                 Text("自己紹介")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(Color(hex: "0F1A2E").opacity(0.6))
+                    .foregroundColor(Color.tasukiMutedText)
                 Text(coachProfile.bio)
                     .font(.system(size: 14, weight: .regular))
-                    .foregroundColor(Color(hex: "0F1A2E"))
+                    .foregroundColor(Color.tasukiPrimary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -143,19 +143,19 @@ struct CoachProfileView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("経歴/資格")
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(Color(hex: "0F1A2E"))
+                .foregroundColor(Color.tasukiPrimary)
             
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(coachProfile.background, id: \.self) { item in
                     HStack(alignment: .top, spacing: 8) {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.system(size: 16))
-                            .foregroundColor(Color(hex: "2E5CFF"))
+                            .foregroundColor(Color.tasukiAccentOrange)
                             .padding(.top, 2)
                         
                         Text(item)
                             .font(.system(size: 14, weight: .regular))
-                            .foregroundColor(Color(hex: "0F1A2E"))
+                            .foregroundColor(Color.tasukiPrimary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -169,19 +169,19 @@ struct CoachProfileView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("専門分野")
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(Color(hex: "0F1A2E"))
+                .foregroundColor(Color.tasukiPrimary)
             
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(coachProfile.expertise, id: \.self) { item in
                     HStack(spacing: 0) {
                         Text(item)
                             .font(.system(size: 13, weight: .regular))
-                            .foregroundColor(Color(hex: "2E5CFF"))
+                            .foregroundColor(Color.tasukiAccentOrange)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
                             .background(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .fill(Color(hex: "2E5CFF").opacity(0.1))
+                                    .fill(Color.tasukiDarkCard)
                             )
                         
                         Spacer()
@@ -197,25 +197,25 @@ struct CoachProfileView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("回答済み質問（最近3件）")
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(Color(hex: "0F1A2E"))
+                .foregroundColor(Color.tasukiPrimary)
             
             VStack(spacing: 12) {
                 ForEach(coachProfile.recentAnswers, id: \.self) { answer in
                     VStack(alignment: .leading, spacing: 8) {
                         Text(answer)
                             .font(.system(size: 13, weight: .regular))
-                            .foregroundColor(Color(hex: "0F1A2E"))
+                            .foregroundColor(Color.tasukiPrimary)
                             .fixedSize(horizontal: false, vertical: true)
                         
                         Text("タップして詳細を見る →")
                             .font(.system(size: 11, weight: .regular))
-                            .foregroundColor(Color(hex: "2E5CFF"))
+                            .foregroundColor(Color.tasukiAccentOrange)
                     }
                     .padding(12)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(
                         RoundedRectangle(cornerRadius: 8)
-                            .fill(Color(hex: "F5F7FA"))
+                            .fill(Color.tasukiDarkCard)
                     )
                 }
             }

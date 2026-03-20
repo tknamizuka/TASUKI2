@@ -15,6 +15,8 @@ final class RunTracker: NSObject, ObservableObject {
     @Published var distanceKm: Double = 0
     @Published var isTracking: Bool = false
     @Published var locationError: String?
+    @Published private(set) var routeCoordinates: [CLLocationCoordinate2D] = []
+    @Published private(set) var trackingStartedAt: Date?
     
     private let locationManager = CLLocationManager()
     private var lastLocation: CLLocation?
@@ -42,6 +44,8 @@ final class RunTracker: NSObject, ObservableObject {
         lastLocation = nil
         distanceKm = 0
         lastDistanceBucket = 0
+        routeCoordinates = []
+        trackingStartedAt = Date()
         locationError = nil
         locationManager.startUpdatingLocation()
         isTracking = true
@@ -60,12 +64,24 @@ final class RunTracker: NSObject, ObservableObject {
     func reset() {
         lastLocation = nil
         distanceKm = 0
+        routeCoordinates = []
+        trackingStartedAt = nil
     }
 }
 
 extension RunTracker: CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let newLocation = locations.last, newLocation.horizontalAccuracy >= 0 else { return }
+        DispatchQueue.main.async {
+            if let lastCoord = self.routeCoordinates.last {
+                let last = CLLocation(latitude: lastCoord.latitude, longitude: lastCoord.longitude)
+                if last.distance(from: newLocation) >= 5 {
+                    self.routeCoordinates.append(newLocation.coordinate)
+                }
+            } else {
+                self.routeCoordinates.append(newLocation.coordinate)
+            }
+        }
         if let last = lastLocation {
             let meters = last.distance(from: newLocation)
             if meters > 0 && meters < 500 {

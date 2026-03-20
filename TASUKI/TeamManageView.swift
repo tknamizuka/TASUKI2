@@ -15,34 +15,42 @@ struct TeamManageView: View {
     }
 
     var body: some View {
-        VStack {
-            if isLoading {
-                ProgressView()
-            }
+        ZStack {
+            Color.tasukiDarkBackground
+                .ignoresSafeArea()
 
-            if let err = errorMessage {
-                Text(err).foregroundColor(.red)
-            }
+            VStack {
+                if isLoading {
+                    ProgressView()
+                }
 
-            List {
-                ForEach(requests) { req in
-                    HStack {
-                        Text(req.uid)
-                        Spacer()
-                        Text(req.requestedAt, style: .date)
-                        Button("承認") {
-                            approveRequest(req)
+                if let err = errorMessage {
+                    Text(err).foregroundColor(Color.tasukiAccentOrange)
+                }
+
+                List {
+                    ForEach(requests) { req in
+                        HStack {
+                            Text(req.uid).foregroundColor(Color.tasukiPrimary)
+                            Spacer()
+                            Text(req.requestedAt, style: .date).foregroundColor(Color.tasukiMutedText)
+                            Button("承認") {
+                                approveRequest(req)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            Button("拒否") {
+                                denyRequest(req)
+                            }
+                            .tint(.red)
                         }
-                        .buttonStyle(.borderedProminent)
-                        Button("拒否") {
-                            denyRequest(req)
-                        }
-                        .tint(.red)
+                        .listRowBackground(Color.tasukiDarkCard)
                     }
                 }
-            }
-            .refreshable {
-                await loadRequests()
+                .scrollContentBackground(.hidden)
+                .background(Color.tasukiDarkBackground)
+                .refreshable {
+                    await loadRequests()
+                }
             }
         }
         .task {

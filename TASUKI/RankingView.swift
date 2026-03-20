@@ -1,4 +1,6 @@
 import SwiftUI
+import FirebaseFirestore
+import FirebaseAuth
 
 private enum RankingMode {
     case personal
@@ -21,6 +23,8 @@ struct RankingView: View {
     @State private var mode: RankingMode = .personal
     @State private var period: RankingPeriod = .total
     @State private var filter: RankingFilter = .overall
+    @State private var remoteUsers: [User] = []
+    @State private var remoteTeams: [SampleTeam] = []
     
     @AppStorage("myRank") private var myRank: String = "Rank B"
     @AppStorage("myName") private var myName: String = "Hiro"
@@ -30,6 +34,9 @@ struct RankingView: View {
     private var myPrefecture: String { "東京都" }
     
     private var personalSource: [User] {
+        if !remoteUsers.isEmpty {
+            return remoteUsers
+        }
         var users = [mockUser] + mockUsers
         let myPoints = PointService.shared.currentTotalPoints()
         if myPoints > 0 {
@@ -42,6 +49,9 @@ struct RankingView: View {
     }
     
     private var teamSource: [SampleTeam] {
+        if !remoteTeams.isEmpty {
+            return remoteTeams
+        }
         var teams = SampleTeam.samples
         if !myTeamId.isEmpty {
             let total = PointService.shared.teamTotalPoints(teamId: myTeamId)
@@ -100,6 +110,7 @@ struct RankingView: View {
         .navigationTitle("ランキング")
         .navigationBarTitleDisplayMode(.inline)
         .background(Color(uiColor: .systemGroupedBackground))
+        .onAppear(perform: fetchRemoteRankingIfPossible)
     }
     
     // MARK: - 個人ランキング
@@ -257,6 +268,80 @@ struct RankingView: View {
             .listRowBackground(isMyTeam ? Color(hex: "2E5CFF").opacity(0.12) : Color.clear)
         }
         .listStyle(.plain)
+    }
+
+    private func fetchRemoteRankingIfPossible() {
+        guard Auth.auth().currentUser != nil else { return }
+        let db = Firestore.firestore()
+
+        db.collection("users")
+            .order(by: "totalPoints", descending: true)
+            .limit(to: 100)
+            .getDocuments { snapshot, _ in
+                guard let docs = snapshot?.documents else { return }
+                let mapped: [User] = docs.map { doc in
+                    let data = doc.data()
+                    let name = data["name"] as? String ?? "Runner"
+                    let rank = data["rank"] as? String ?? "Rank B"
+                    let prefecture = data["prefecture"] as? String ?? "東京都"
+                    let total = data["totalPoints"] as? Int ?? 0
+                    let monthly = data["monthlyPoints"] as? Int ?? 0
+                    return User(
+                        id: UUID(),
+                        name: name,
+                        profileImage: "runner",
+                        profileImageUrl: nil,
+                        bio: "",
+                        rank: rank,
+                        age: 20,
+                        gender: "other",
+                        purpose: "",
+                        prefecture: prefecture,
+                        area: prefecture,
+                        pace: "5:30 /km",
+                        runningFrequency: "",
+                        personalBest: "",
+                        schedule: "",
+                        nextRace: "",
+                        targetTime: "",
+                        monthlyDistance: 0,
+                        monthlyTarget: 0,
+                        avgPace: "5:30 /km",
+                        totalPoints: total,
+                        monthlyPoints: monthly,
+                        matchRate: 0,
+                        lastLogin: Date(),
+                        spotName: prefecture,
+                        latitude: 0,
+                        longitude: 0,
+                        distanceFromUserMock: 0
+                    )
+                }
+                DispatchQueue.main.async {
+                    remoteUsers = mapped
+                }
+            }
+
+        db.collection("teams")
+            .order(by: "teamTotalPoints", descending: true)
+            .limit(to: 50)
+            .getDocuments { snapshot, _ in
+                guard let docs = snapshot?.documents else { return }
+                let mapped: [SampleTeam] = docs.map { doc in
+                    let data = doc.data()
+                    return SampleTeam(
+                        id: doc.documentID,
+                        name: data["name"] as? String ?? "Team",
+                        prefecture: data["prefecture"] as? String ?? "東京都",
+                        memberCount: (data["members"] as? [String])?.count ?? 0,
+                        totalPoints: data["teamTotalPoints"] as? Int ?? 0,
+                        monthlyPoints: data["teamMonthlyPoints"] as? Int ?? 0
+                    )
+                }
+                DispatchQueue.main.async {
+                    remoteTeams = mapped
+                }
+            }
     }
 }
 

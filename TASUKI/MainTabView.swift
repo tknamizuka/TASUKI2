@@ -8,6 +8,7 @@ struct MainTabView: View {
     
     private let tabItems: [(icon: String, label: String)] = [
         ("house.fill", "Home"),
+        ("figure.run", "Run"),
         ("magnifyingglass", "Find"),
         ("stopwatch.fill", "Time"),
         ("person.3.fill", "EKIDEN"),
@@ -24,14 +25,18 @@ struct MainTabView: View {
                         .environmentObject(unreadProvider)
                 }
             case 1:
-                FindView()
+                NavigationStack {
+                    RunRecordingView()
+                }
             case 2:
-                TimeTrialEntryView()
+                FindView()
             case 3:
-                TeamView()
+                TimeTrialEntryView()
             case 4:
-                CoachView()
+                TeamView()
             case 5:
+                CoachView()
+            case 6:
                 MyProfileView()
             default:
                 NavigationStack { HomeView().environmentObject(unreadProvider) }
@@ -71,25 +76,33 @@ struct MainTabView: View {
                 Button(action: { selectedTab = index }) {
                     VStack(spacing: 2) {
                         Image(systemName: tabItems[index].icon)
-                            .font(.system(size: 20))
+                            .font(.system(size: 18, weight: .semibold))
                         Text(tabItems[index].label)
                             .font(.system(size: 9))
                             .lineLimit(1)
                             .minimumScaleFactor(0.7)
                     }
+                    .padding(.vertical, 8)
                     .frame(maxWidth: .infinity)
-                    .foregroundColor(selectedTab == index ? Color(hex: "0F1A2E") : .gray)
+                    .foregroundColor(selectedTab == index ? Color.tasukiPrimary : Color.tasukiMutedText)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(selectedTab == index ? Color.tasukiSurface : .clear)
+                    )
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(.vertical, 6)
-        .background(Color.white)
-        .overlay(alignment: .top) {
-            Rectangle()
-                .fill(Color.gray.opacity(0.2))
-                .frame(height: 0.5)
-        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.white)
+                .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 2)
+        )
+        .padding(.horizontal, 10)
+        .padding(.top, 4)
+        .padding(.bottom, 8)
     }
 }
 

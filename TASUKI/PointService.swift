@@ -1,5 +1,6 @@
 import Foundation
 import FirebaseFirestore
+import FirebaseAuth
 
 /// TASUKI 内の「ポイント」を管理するシンプルなサービス。
 /// 現時点ではローカル（UserDefaults）でのみ管理し、バックエンドとは同期しない。
@@ -37,6 +38,8 @@ final class PointService {
         defaults.set(monthKey, forKey: "myPointsMonth")
         defaults.set(total, forKey: "myTotalPoints")
         defaults.set(monthly, forKey: "myMonthlyPoints")
+
+        syncCurrentUserPointsToFirestore(totalIncrement: amount, monthlyIncrement: amount)
     }
     
     /// 現在の累計ポイントを取得するヘルパー（UI 用）
@@ -74,6 +77,25 @@ final class PointService {
         }
         return defaults.integer(forKey: "myMonthlyPoints")
     }
+
+    /// Firestore のポイントをローカル（UserDefaults）へ同期する
+    func syncFromRemoteIfNeeded(completion: (() -> Void)? = nil) {
+        guard let uid = Auth.auth().currentUser?.uid else {
+            completion?()
+            return
+        }
+        db.collection("users").document(uid).getDocument { snapshot, _ in
+            defer { completion?() }
+            guard let data = snapshot?.data() else { return }
+            let defaults = UserDefaults.standard
+            let monthKey = self.currentMonthKey()
+            let total = data["totalPoints"] as? Int ?? defaults.integer(forKey: "myTotalPoints")
+            let monthly = data["monthlyPoints"] as? Int ?? defaults.integer(forKey: "myMonthlyPoints")
+            defaults.set(monthKey, forKey: "myPointsMonth")
+            defaults.set(total, forKey: "myTotalPoints")
+            defaults.set(monthly, forKey: "myMonthlyPoints")
+        }
+    }
     
     /// チームにポイントを付与する（サンプルチームは UserDefaults、本番は Firestore）
     func addTeamPoints(teamId: String, totalAmount: Int, monthlyAmount: Int) {
@@ -104,28 +126,27 @@ final class PointService {
     
     /// レース完了時にポイントを付与（1回のみ）
     func awardRacePointsIfNeeded(raceId: String, participants: [(id: String, name: String)], isSample: Bool) {
+        // 本番レースは Cloud Functions で付与するため、クライアント側では加算しない。
+        guard isSample else { return }
         let key = "racePointsAwarded_\(raceId)"
         guard !UserDefaults.standard.bool(forKey: key) else { return }
+        guard !participants.isEmpty else { return }
         
         let positionPoints: [Int] = [500, 400, 320, 260, 212, 170, 136, 109, 87, 70]
         let finishBonus = 100   // 完走ボーナス（区間DNFなし）
         let participationBonus = 50  // 参加ボーナス
-        
-        for (index, p) in participants.enumerated() {
-            let posPoints = index < positionPoints.count ? positionPoints[index] : 0
-            let amount = posPoints + finishBonus + participationBonus
-            
-            if isSample {
-                if p.id == "sample_user" || p.name == "あなた" {
-                    addPointsToCurrentUser(amount: amount)
-                }
-                if let teamId = UserDefaults.standard.string(forKey: "myTeamId"), !teamId.isEmpty {
-                    addTeamPoints(teamId: teamId, totalAmount: amount, monthlyAmount: amount)
-                }
-            } else {
-                addUserPointsFirestore(userId: p.id, amount: amount)
-                fetchTeamIdAndAddPoints(userId: p.id, amount: amount)
-            }
+
+        // クライアント側は「自分のポイント」だけを確定する。全体配布はサーバー実装で扱う前提。
+        let myId = isSample ? "sample_user" : (Auth.auth().currentUser?.uid ?? "")
+        guard let myIndex = participants.firstIndex(where: { $0.id == myId || (isSample && $0.name == "あなた") }) else {
+            return
+        }
+        let posPoints = myIndex < positionPoints.count ? positionPoints[myIndex] : 0
+        let amount = posPoints + finishBonus + participationBonus
+        addPointsToCurrentUser(amount: amount)
+
+        if let teamId = UserDefaults.standard.string(forKey: "myTeamId"), !teamId.isEmpty {
+            addTeamPoints(teamId: teamId, totalAmount: amount, monthlyAmount: amount)
         }
         
         UserDefaults.standard.set(true, forKey: key)
@@ -159,19 +180,13 @@ final class PointService {
         ]) { _ in }
     }
     
-    private func addUserPointsFirestore(userId: String, amount: Int) {
-        let ref = db.collection("users").document(userId)
-        ref.updateData([
-            "totalPoints": FieldValue.increment(Int64(amount)),
-            "monthlyPoints": FieldValue.increment(Int64(amount))
-        ]) { _ in }
-    }
-    
-    private func fetchTeamIdAndAddPoints(userId: String, amount: Int) {
-        db.collection("users").document(userId).getDocument { [weak self] snapshot, _ in
-            guard let teamId = snapshot?.data()?["teamId"] as? String, !teamId.isEmpty else { return }
-            self?.addTeamPointsFirestore(teamId: teamId, totalAmount: amount, monthlyAmount: amount)
-        }
+    private func syncCurrentUserPointsToFirestore(totalIncrement: Int, monthlyIncrement: Int) {
+        guard let uid = Auth.auth().currentUser?.uid else { return }
+        db.collection("users").document(uid).setData([
+            "totalPoints": FieldValue.increment(Int64(totalIncrement)),
+            "monthlyPoints": FieldValue.increment(Int64(monthlyIncrement)),
+            "updatedAt": Timestamp(date: Date())
+        ], merge: true)
     }
     
     /// "yyyyMM" 形式の月キー

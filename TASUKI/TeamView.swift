@@ -153,7 +153,7 @@ struct TeamView: View {
                 .navigationBarTitleDisplayMode(.large)
             } else {
                 ZStack {
-                    Color.white
+                    Color.tasukiDarkBackground
                         .ignoresSafeArea()
                     
                     ScrollView {
@@ -181,7 +181,7 @@ struct TeamView: View {
                                     .frame(height: 50)
                                     .background(
                                         RoundedRectangle(cornerRadius: 12)
-                                            .fill(Color(hex: "0F1A2E"))
+                                            .fill(Color.tasukiAccentOrange)
                                     )
                                 }
                                 .padding(.horizontal, 20)
@@ -200,7 +200,7 @@ struct TeamView: View {
                             .font(.system(size: 22))
                             .foregroundColor(.white)
                             .frame(width: 56, height: 56)
-                            .background(Circle().fill(Color(hex: "2E5CFF")))
+                            .background(Circle().fill(Color.tasukiAccentOrange))
                     }
                     .padding(.top, 8)
                     .padding(.trailing, 20)
@@ -305,7 +305,7 @@ struct TeamView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("メンバー")
                 .font(.system(size: 18, weight: .bold))
-                .foregroundColor(Color(hex: "0F1A2E"))
+                .foregroundColor(Color.tasukiPrimary)
                 .padding(.horizontal, 4)
             
             VStack(spacing: 8) {
@@ -328,7 +328,7 @@ struct TeamView: View {
                 .frame(height: 40)
                 .background(
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(Color(hex: "2E5CFF"))
+                        .fill(Color.tasukiAccentOrange)
                 )
             }
             .padding(.top, 8)
@@ -336,8 +336,7 @@ struct TeamView: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color.white)
-                .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+                .fill(Color.tasukiDarkCard)
         )
     }
     
@@ -347,12 +346,12 @@ struct TeamView: View {
             if let avatarImage = member.avatarImage {
                 Image(systemName: avatarImage)
                     .font(.system(size: 20))
-                    .foregroundColor(Color(hex: "0F1A2E"))
+                    .foregroundColor(Color.tasukiPrimary)
                     .saturation(0)
                     .frame(width: 36, height: 36)
                     .background(
                         Circle()
-                            .fill(Color(hex: "F5F7FA"))
+                            .fill(Color.tasukiDarkCardSecondary)
                             .overlay(
                                 Circle()
                                     .stroke(Color(hex: member.condition.colorHex), lineWidth: member.condition == .sos ? 3 : 2)
@@ -370,21 +369,21 @@ struct TeamView: View {
             
             Text(member.name)
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(Color(hex: "0F1A2E"))
+                .foregroundColor(Color.tasukiPrimary)
                 .frame(width: 70, alignment: .leading)
             
             HStack(spacing: 4) {
                 Text("\(Int(member.currentDistance))km")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(Color(hex: "0F1A2E"))
+                    .foregroundColor(Color.tasukiPrimary)
                 
                 Text("/")
                     .font(.system(size: 13, weight: .regular))
-                    .foregroundColor(Color(hex: "0F1A2E").opacity(0.5))
+                    .foregroundColor(Color.tasukiMutedText)
                 
                 Text("\(Int(member.targetDistance))km")
                     .font(.system(size: 13, weight: .regular))
-                    .foregroundColor(Color(hex: "0F1A2E").opacity(0.7))
+                    .foregroundColor(Color.tasukiMutedText)
             }
             
             Spacer()
@@ -397,7 +396,7 @@ struct TeamView: View {
         .padding(.horizontal, 10)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(member.condition == .sos ? Color(hex: member.condition.colorHex).opacity(0.1) : Color(hex: "F5F7FA").opacity(0.3))
+                .fill(member.condition == .sos ? Color(hex: member.condition.colorHex).opacity(0.15) : Color.tasukiDarkCardSecondary)
         )
     }
     
@@ -407,7 +406,7 @@ struct TeamView: View {
             HStack(spacing: 8) {
                 Text(teamName)
                     .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(Color(hex: "0F1A2E"))
+                    .foregroundColor(Color.tasukiPrimary)
                 if !selectedTeamId.isEmpty {
                     let total = PointService.shared.teamTotalPoints(teamId: selectedTeamId)
                     let tier = TeamRankTier.tier(forTeamPoints: total)
@@ -423,10 +422,10 @@ struct TeamView: View {
                     VStack(alignment: .trailing, spacing: 2) {
                         Text("\(PointService.shared.teamTotalPoints(teamId: selectedTeamId))pt")
                             .font(.system(size: 14, weight: .bold))
-                            .foregroundColor(Color(hex: "0F1A2E"))
+                            .foregroundColor(Color.tasukiPrimary)
                         Text("累計")
                             .font(.system(size: 10))
-                            .foregroundColor(.gray)
+                            .foregroundColor(Color.tasukiMutedText)
                     }
                 }
             }
@@ -434,16 +433,16 @@ struct TeamView: View {
             
             Text("\(Int(progressPercentage))%")
                 .font(.system(size: 56, weight: .bold))
-                .foregroundColor(Color(hex: "2E5CFF"))
+                .foregroundColor(Color.tasukiAccentOrange)
             
             Text("\(monthEndDateString)まで（あと\(remainingDays)日）")
                 .font(.system(size: 14, weight: .regular))
-                .foregroundColor(Color(hex: "0F1A2E").opacity(0.7))
+                .foregroundColor(Color.tasukiMutedText)
             
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(Color(hex: "F5F7FA"))
+                        .fill(Color.tasukiDarkCardSecondary)
                         .frame(height: 24)
                     
                     RoundedRectangle(cornerRadius: 12)
@@ -451,7 +450,7 @@ struct TeamView: View {
                             LinearGradient(
                                 gradient: Gradient(colors: [
                                     Color(hex: "2E5CFF"),
-                                    Color(hex: "0F1A2E")
+                                    Color.tasukiAccentOrange
                                 ]),
                                 startPoint: .leading,
                                 endPoint: .trailing
@@ -465,23 +464,22 @@ struct TeamView: View {
             HStack {
                 Text("\(Int(currentDistance))km")
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(Color(hex: "0F1A2E"))
+                    .foregroundColor(Color.tasukiPrimary)
                 
                 Text("/")
                     .font(.system(size: 18, weight: .regular))
-                    .foregroundColor(Color(hex: "0F1A2E").opacity(0.5))
+                    .foregroundColor(Color.tasukiMutedText)
                 
                 Text("\(Int(targetDistance))km")
                     .font(.system(size: 18, weight: .regular))
-                    .foregroundColor(Color(hex: "0F1A2E").opacity(0.7))
+                    .foregroundColor(Color.tasukiMutedText)
             }
         }
         .padding(.vertical, 24)
         .padding(.horizontal, 20)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Color.white)
-                .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+                .fill(Color.tasukiDarkCard)
         )
     }
     
@@ -549,7 +547,7 @@ struct TeamChatSheetView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color.white
+                Color.tasukiDarkBackground
                     .ignoresSafeArea()
                 
                 VStack(spacing: 0) {
@@ -577,12 +575,12 @@ struct TeamChatSheetView: View {
                         TextField("メッセージを入力...", text: $messageText, axis: .vertical)
                             .textFieldStyle(.plain)
                             .font(.system(size: 16))
-                            .foregroundColor(Color(hex: "0F1A2E"))
+                            .foregroundColor(Color.tasukiPrimary)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 10)
                             .background(
                                 RoundedRectangle(cornerRadius: 20)
-                                    .fill(Color(hex: "F5F7FA"))
+                                    .fill(Color.tasukiDarkCardSecondary)
                             )
                             .focused($isTextFieldFocused)
                             .lineLimit(1...4)
@@ -596,14 +594,14 @@ struct TeamChatSheetView: View {
                                 .frame(width: 44, height: 44)
                                 .background(
                                     Circle()
-                                        .fill(messageText.isEmpty ? Color.gray : Color(hex: "2E5CFF"))
+                                        .fill(messageText.isEmpty ? Color.gray : Color.tasukiAccentOrange)
                                 )
                         }
                         .disabled(messageText.isEmpty)
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
-                    .background(Color.white)
+                    .background(Color.tasukiDarkBackground)
                 }
             }
             .navigationTitle("チームチャット")
@@ -613,7 +611,7 @@ struct TeamChatSheetView: View {
                     Button("閉じる") {
                         dismiss()
                     }
-                    .foregroundColor(Color(hex: "2E5CFF"))
+                    .foregroundColor(Color.tasukiPrimary)
                 }
             }
         }
@@ -686,7 +684,7 @@ struct TeamChatSheetView: View {
                 Spacer()
                 Text("--- \(message.content) ---")
                     .font(.system(size: 11, weight: .regular))
-                    .foregroundColor(Color(hex: "0F1A2E").opacity(0.4))
+                    .foregroundColor(Color.tasukiMutedText)
                 Spacer()
             }
             .padding(.vertical, 8)
@@ -698,12 +696,12 @@ struct TeamChatSheetView: View {
                     if let avatarImage = message.user.avatarImage {
                         Image(systemName: avatarImage)
                             .font(.system(size: 18))
-                            .foregroundColor(Color(hex: "0F1A2E"))
+                            .foregroundColor(Color.tasukiPrimary)
                             .saturation(0)
                             .frame(width: 28, height: 28)
                             .background(
                                 Circle()
-                                    .fill(Color(hex: "F5F7FA"))
+                                    .fill(Color.tasukiDarkCardSecondary)
                             )
                     }
                 }
@@ -712,17 +710,17 @@ struct TeamChatSheetView: View {
                     if !isFromMe {
                         Text(message.user.name)
                             .font(.system(size: 11, weight: .semibold))
-                            .foregroundColor(Color(hex: "0F1A2E").opacity(0.6))
+                            .foregroundColor(Color.tasukiMutedText)
                     }
                     
                     Text(message.content)
                         .font(.system(size: 15, weight: .regular))
-                        .foregroundColor(isFromMe ? .white : Color(hex: "0F1A2E"))
+                        .foregroundColor(isFromMe ? .white : Color.tasukiPrimary)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
                         .background(
                             RoundedRectangle(cornerRadius: 18)
-                                .fill(isFromMe ? Color(hex: "2E5CFF") : Color(hex: "F5F7FA"))
+                                .fill(isFromMe ? Color.tasukiAccentOrange : Color.tasukiDarkCard)
                         )
                 }
                 .frame(maxWidth: UIScreen.main.bounds.width * 0.7, alignment: isFromMe ? .trailing : .leading)
@@ -792,7 +790,7 @@ struct ConditionUpdateSheet: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color.white
+                Color.tasukiDarkBackground
                     .ignoresSafeArea()
                 
                 ScrollView {
@@ -800,7 +798,7 @@ struct ConditionUpdateSheet: View {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("調子")
                                 .font(.system(size: 18, weight: .bold))
-                                .foregroundColor(Color(hex: "0F1A2E"))
+                                .foregroundColor(Color.tasukiPrimary)
                             
                             Picker("調子", selection: $selectedCondition) {
                                 ForEach(Condition.allCases, id: \.self) { condition in
@@ -813,6 +811,7 @@ struct ConditionUpdateSheet: View {
                                 }
                             }
                             .pickerStyle(.menu)
+                            .tint(Color.tasukiPrimary)
                         }
                         .padding(.horizontal, 20)
                         .padding(.top, 20)
@@ -828,14 +827,14 @@ struct ConditionUpdateSheet: View {
                     Button("キャンセル") {
                         onCancel()
                     }
-                    .foregroundColor(Color(hex: "0F1A2E"))
+                    .foregroundColor(Color.tasukiPrimary)
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("保存") {
                         onSave()
                     }
-                    .foregroundColor(Color(hex: "2E5CFF"))
+                    .foregroundColor(Color.tasukiAccentOrange)
                     .fontWeight(.semibold)
                 }
             }

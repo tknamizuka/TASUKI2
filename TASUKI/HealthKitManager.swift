@@ -2,6 +2,38 @@ import Foundation
 import HealthKit
 import CoreLocation
 
+/// ランニングデータ取得元
+enum RunningDataSource: String, CaseIterable, Identifiable {
+    case all = "all"
+    case garmin = "garmin"
+    case suunto = "suunto"
+    case appleHealth = "apple_health"
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .all: return "すべて"
+        case .garmin: return "Garmin"
+        case .suunto: return "Suunto"
+        case .appleHealth: return "Apple Health"
+        }
+    }
+
+    var sourceKeywords: [String] {
+        switch self {
+        case .all:
+            return []
+        case .garmin:
+            return ["garmin"]
+        case .suunto:
+            return ["suunto"]
+        case .appleHealth:
+            return ["health", "apple"]
+        }
+    }
+}
+
 /// 期間内のランニングワークアウト1件（目標距離通過タイムはルートがあれば算出）
 struct RunningWorkoutInfo: Identifiable {
     let id: UUID
@@ -89,7 +121,7 @@ final class HealthKitManager {
     }
     
     /// 当月のウォーキング＋ランニング距離 (km) を取得する
-    func fetchRunningDistanceThisMonth(completion: @escaping (Result<Double, Error>) -> Void) {
+    func fetchRunningDistanceThisMonth(dataSource: RunningDataSource = .all, completion: @escaping (Result<Double, Error>) -> Void) {
         guard HKHealthStore.isHealthDataAvailable() else {
             let error = NSError(domain: "HealthKit", code: 0, userInfo: [
                 NSLocalizedDescriptionKey: "HealthKit is not available on this device."
@@ -117,48 +149,60 @@ final class HealthKitManager {
         }
         
         let predicate = HKQuery.predicateForSamples(withStart: startOfMonth, end: now, options: .strictStartDate)
-        
-        let query = HKStatisticsQuery(quantityType: distanceType,
-                                      quantitySamplePredicate: predicate,
-                                      options: .cumulativeSum) { _, result, error in
-            if let error = error {
+
+        predicateForDataSource(sampleType: distanceType, basePredicate: predicate, dataSource: dataSource) { [weak self] sourcePredicate in
+            guard let self = self else { return }
+            let finalPredicate: NSPredicate
+            if let sourcePredicate = sourcePredicate {
+                finalPredicate = NSCompoundPredicate(andPredicateWithSubpredicates: [predicate, sourcePredicate])
+            } else {
+                finalPredicate = predicate
+            }
+
+            let query = HKStatisticsQuery(quantityType: distanceType,
+                                          quantitySamplePredicate: finalPredicate,
+                                          options: .cumulativeSum) { _, result, error in
+                if let error = error {
+                    DispatchQueue.main.async {
+                        RealityMiningManager.shared.trackEvent(
+                            name: "healthkit_fetch_failure",
+                            properties: [
+                                "fetch_type": "monthly_distance",
+                                "data_source": dataSource.rawValue,
+                                "error_message": error.localizedDescription
+                            ]
+                        )
+                        completion(.failure(error))
+                    }
+                    return
+                }
+
+                guard let sumQuantity = result?.sumQuantity() else {
+                    // データがない場合は 0km とする
+                    DispatchQueue.main.async {
+                        completion(.success(0.0))
+                    }
+                    return
+                }
+
+                let meters = sumQuantity.doubleValue(for: HKUnit.meter())
+                let kilometers = meters / 1000.0
+
                 DispatchQueue.main.async {
                     RealityMiningManager.shared.trackEvent(
-                        name: "healthkit_fetch_failure",
+                        name: "healthkit_fetch_success",
                         properties: [
                             "fetch_type": "monthly_distance",
-                            "error_message": error.localizedDescription
+                            "data_source": dataSource.rawValue,
+                            "distance_km": kilometers
                         ]
                     )
-                    completion(.failure(error))
+                    completion(.success(kilometers))
                 }
-                return
             }
-            
-            guard let sumQuantity = result?.sumQuantity() else {
-                // データがない場合は 0km とする
-                DispatchQueue.main.async {
-                    completion(.success(0.0))
-                }
-                return
-            }
-            
-            let meters = sumQuantity.doubleValue(for: HKUnit.meter())
-            let kilometers = meters / 1000.0
-            
-            DispatchQueue.main.async {
-                RealityMiningManager.shared.trackEvent(
-                    name: "healthkit_fetch_success",
-                    properties: [
-                        "fetch_type": "monthly_distance",
-                        "distance_km": kilometers
-                    ]
-                )
-                completion(.success(kilometers))
-            }
+
+            self.healthStore.execute(query)
         }
-        
-        healthStore.execute(query)
     }
     
     // MARK: - ワークアウト・ルート（タイムトライアル用）
@@ -242,50 +286,81 @@ final class HealthKitManager {
         }
         healthStore.execute(q)
     }
+
+    private func predicateForDataSource(sampleType: HKSampleType, basePredicate: NSPredicate, dataSource: RunningDataSource, completion: @escaping (NSPredicate?) -> Void) {
+        guard dataSource != .all else {
+            completion(nil)
+            return
+        }
+
+        let sourceQuery = HKSourceQuery(sampleType: sampleType, samplePredicate: basePredicate) { _, sources, _ in
+            let filtered = (sources ?? []).filter { source in
+                let sourceName = source.name.lowercased()
+                return dataSource.sourceKeywords.contains { sourceName.contains($0) }
+            }
+            guard !filtered.isEmpty else {
+                completion(NSPredicate(value: false))
+                return
+            }
+            completion(HKQuery.predicateForObjects(from: Set(filtered)))
+        }
+        healthStore.execute(sourceQuery)
+    }
     
     /// 期間内のランニングワークアウトを取得。minDistanceKm 以上で、targetDistanceKm 時点のタイムをルートから算出（可能な場合）
-    func fetchRunningWorkouts(from start: Date, to end: Date, minDistanceKm: Double, targetDistanceKm: Double, completion: @escaping (Result<[RunningWorkoutInfo], Error>) -> Void) {
+    func fetchRunningWorkouts(from start: Date, to end: Date, minDistanceKm: Double, targetDistanceKm: Double, dataSource: RunningDataSource = .all, completion: @escaping (Result<[RunningWorkoutInfo], Error>) -> Void) {
         guard HKHealthStore.isHealthDataAvailable() else {
             completion(.failure(NSError(domain: "HealthKit", code: 0, userInfo: [NSLocalizedDescriptionKey: "HealthKit is not available."])))
             return
         }
         let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: .strictStartDate)
-        let workoutQuery = HKSampleQuery(sampleType: HKObjectType.workoutType(), predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)]) { [weak self] _, samples, error in
+        let workoutType = HKObjectType.workoutType()
+        predicateForDataSource(sampleType: workoutType, basePredicate: predicate, dataSource: dataSource) { [weak self] sourcePredicate in
             guard let self = self else { return }
-            if let error = error {
-                DispatchQueue.main.async { completion(.failure(error)) }
-                return
+            let finalPredicate: NSPredicate
+            if let sourcePredicate = sourcePredicate {
+                finalPredicate = NSCompoundPredicate(andPredicateWithSubpredicates: [predicate, sourcePredicate])
+            } else {
+                finalPredicate = predicate
             }
-            let workouts = (samples as? [HKWorkout])?.filter { $0.workoutActivityType == .running } ?? []
-            let targetMeters = targetDistanceKm * 1000
-            let minMeters = minDistanceKm * 1000
-            var infos: [RunningWorkoutInfo] = []
-            let group = DispatchGroup()
-            let lock = NSLock()
-            for w in workouts {
-                group.enter()
-                self.getTotalDistanceMeters(workout: w) { meters in
-                    guard meters >= minMeters else { group.leave(); return }
-                    let totalKm = meters / 1000.0
-                    let duration = w.duration
-                    self.timeAtDistance(workout: w, targetMeters: targetMeters) { result in
-                        lock.lock()
-                        defer { lock.unlock(); group.leave() }
-                        switch result {
-                        case .success(let sec):
-                            infos.append(RunningWorkoutInfo(id: w.uuid, startDate: w.startDate, durationSeconds: duration, totalDistanceKm: totalKm, timeAtTargetSeconds: sec))
-                        case .failure:
-                            infos.append(RunningWorkoutInfo(id: w.uuid, startDate: w.startDate, durationSeconds: duration, totalDistanceKm: totalKm, timeAtTargetSeconds: nil))
+
+            let workoutQuery = HKSampleQuery(sampleType: workoutType, predicate: finalPredicate, limit: HKObjectQueryNoLimit, sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)]) { [weak self] _, samples, error in
+                guard let self = self else { return }
+                if let error = error {
+                    DispatchQueue.main.async { completion(.failure(error)) }
+                    return
+                }
+                let workouts = (samples as? [HKWorkout])?.filter { $0.workoutActivityType == .running } ?? []
+                let targetMeters = targetDistanceKm * 1000
+                let minMeters = minDistanceKm * 1000
+                var infos: [RunningWorkoutInfo] = []
+                let group = DispatchGroup()
+                let lock = NSLock()
+                for w in workouts {
+                    group.enter()
+                    self.getTotalDistanceMeters(workout: w) { meters in
+                        guard meters >= minMeters else { group.leave(); return }
+                        let totalKm = meters / 1000.0
+                        let duration = w.duration
+                        self.timeAtDistance(workout: w, targetMeters: targetMeters) { result in
+                            lock.lock()
+                            defer { lock.unlock(); group.leave() }
+                            switch result {
+                            case .success(let sec):
+                                infos.append(RunningWorkoutInfo(id: w.uuid, startDate: w.startDate, durationSeconds: duration, totalDistanceKm: totalKm, timeAtTargetSeconds: sec))
+                            case .failure:
+                                infos.append(RunningWorkoutInfo(id: w.uuid, startDate: w.startDate, durationSeconds: duration, totalDistanceKm: totalKm, timeAtTargetSeconds: nil))
+                            }
                         }
                     }
                 }
+                group.notify(queue: .main) {
+                    infos.sort { $0.startDate > $1.startDate }
+                    completion(.success(infos))
+                }
             }
-            group.notify(queue: .main) {
-                infos.sort { $0.startDate > $1.startDate }
-                completion(.success(infos))
-            }
+            self.healthStore.execute(workoutQuery)
         }
-        healthStore.execute(workoutQuery)
     }
 }
 

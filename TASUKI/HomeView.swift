@@ -22,6 +22,7 @@ struct HomeView: View {
     @StateObject private var behaviorFeatureManager = BehaviorFeatureManager()
     @EnvironmentObject private var unreadProvider: UnreadCountProviderBase
     @EnvironmentObject private var joinedPracticesStore: JoinedPracticesStore
+    @AppStorage("runningDataSource") private var runningDataSourceRaw: String = RunningDataSource.all.rawValue
     init(
         currentDistance: Double = 0.0,
         goalDistance: Double = 100.0,
@@ -45,183 +46,209 @@ struct HomeView: View {
     var progressPercent: Int {
         return Int((currentDistance / goalDistance) * 100)
     }
+
+    private var selectedRunningDataSource: RunningDataSource {
+        RunningDataSource(rawValue: runningDataSourceRaw) ?? .all
+    }
     
     var body: some View {
-        VStack(spacing: 40) {
-            
-            // 1. ブランドビジュアル
-            ZStack {
-                Image("runner")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: UIScreen.main.bounds.width * 0.9)
-                    .opacity(0.15)
-                
-                Text("TASUKI")
-                    .font(.system(size: 50, weight: .heavy))
-                    .tracking(10)
-                    .foregroundColor(Color(hex: "0F1A2E"))
-                    .shadow(color: .white.opacity(0.8), radius: 2, x: 0, y: 0)
-            }
-            .padding(.top, 20)
-            
-            Spacer()
-            
-            // 2. 月間目標進捗 (％表示) — タップで走行履歴
-            VStack(spacing: 15) {
-                ZStack {
-                    Circle()
-                        .stroke(Color.gray.opacity(0.2), lineWidth: 20)
-                        .frame(width: 250, height: 250)
-                    
-                    Circle()
-                        .trim(from: 0.0, to: progress)
-                        .stroke(Color(hex: "0F1A2E"), style: StrokeStyle(lineWidth: 20, lineCap: .round))
-                        .frame(width: 250, height: 250)
-                        .rotationEffect(.degrees(-90))
-                        .animation(.easeOut(duration: 1.0), value: progress)
-                    
-                    VStack(spacing: 5) {
-                        if isHealthKitLoading {
-                            ProgressView()
-                                .scaleEffect(1.2)
-                                .padding(.bottom, 8)
-                            Text("読み込み中...")
-                                .font(.subheadline)
-                                .foregroundColor(.gray)
-                        } else {
-                            HStack(alignment: .lastTextBaseline, spacing: 5) {
-                                Text("\(progressPercent)")
-                                    .font(.system(size: 80, weight: .bold))
-                                    .foregroundColor(Color(hex: "0F1A2E"))
-                                
-                                Text("%")
-                                    .font(.system(size: 40, weight: .bold))
-                                    .foregroundColor(Color(hex: "0F1A2E"))
-                            }
-                            
-                            Text("\(String(format: "%.1f", currentDistance)) / \(Int(goalDistance)) km")
-                                .font(.subheadline)
-                                .fontWeight(.bold)
-                                .foregroundColor(.gray)
-                        }
-                        if let error = healthKitError {
-                            Text(error)
-                                .font(.caption)
-                                .foregroundColor(.red)
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal)
-                        }
-                    }
-                    .contentShape(Rectangle())
-                }
-                .onTapGesture {
-                    if !isHealthKitLoading { showRunHistory = true }
-                }
-                
-                Text("MONTHLY GOAL（タップで履歴）")
-                    .font(.caption)
-                    .fontWeight(.bold)
-                    .foregroundColor(.gray)
-                    .tracking(2)
-            }
-            .sheet(isPresented: $showRunHistory) {
-                RunHistoryListView()
-            }
-            .sheet(isPresented: $showPracticeCalendar) {
-                PracticeScheduleCalendarView(store: joinedPracticesStore)
-            }
-            
-            Spacer()
+        ZStack {
+            Color.tasukiDarkBackground
+                .ignoresSafeArea()
 
-            // 2.5 行動特徴サマリ（Reality Mining）
-            VStack(alignment: .leading, spacing: 10) {
-                Text("BEHAVIOR INSIGHTS")
-                    .font(.caption)
-                    .fontWeight(.bold)
-                    .foregroundColor(.gray)
-                    .tracking(2)
-
-                Group {
-                    if behaviorFeatureManager.isLoading {
-                        HStack {
-                            ProgressView()
-                            Text("行動特徴を読み込み中...")
-                                .font(.footnote)
-                                .foregroundColor(.gray)
-                        }
-                    } else if let feature = behaviorFeatureManager.latestFeature {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("週間ラン回数: \(feature.weeklyRunCount) 回")
-                            Text("先週比: \(feature.weeklyRunTrendDelta >= 0 ? "+" : "")\(feature.weeklyRunTrendDelta)")
-                            Text("継続スコア: \(Int(feature.consistencyScore * 100)) / 100")
-                            Text("ソーシャル活動: \(Int(feature.socialActivityScore * 100)) / 100")
-                            Text("週末アクティブ比率: \(Int(feature.weekendActivityRatio * 100))%")
-                            Text("ルーティン分散: \(Int(feature.routineSpreadScore * 100)) / 100")
-                            if feature.behaviorShiftScore >= 0.7 {
-                                Text("行動変化: 高め")
-                                    .foregroundColor(.orange)
-                            } else {
-                                Text("行動変化: 安定")
-                            }
-                            if let medianSec = feature.medianMessageIntervalSec {
-                                Text("チャット間隔中央値: \(Int(medianSec / 60)) 分")
-                            }
-                            if let hour = feature.topActiveHour {
-                                Text("活動ピーク: \(hour):00台")
-                            }
-                        }
-                        .font(.subheadline)
-                        .foregroundColor(Color(hex: "0F1A2E"))
-                    } else if let error = behaviorFeatureManager.errorMessage {
-                        Text("行動特徴の取得に失敗: \(error)")
-                            .font(.footnote)
-                            .foregroundColor(.red)
-                    } else {
-                        Text("行動特徴データがまだありません")
-                            .font(.footnote)
-                            .foregroundColor(.gray)
+            ScrollView {
+                VStack(spacing: 16) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("RUN DASHBOARD")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .tracking(2)
+                            .foregroundColor(Color.tasukiMutedText)
+                        Text("TASUKI")
+                            .font(.system(size: 36, weight: .heavy))
+                            .tracking(4)
+                            .foregroundColor(Color.tasukiPrimary)
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(20)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20)
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color.tasukiSurface, Color.white],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                    )
+
+                    Button {
+                        if !isHealthKitLoading { showRunHistory = true }
+                    } label: {
+                        VStack(alignment: .leading, spacing: 14) {
+                            HStack {
+                                Text("MONTHLY GOAL")
+                                    .font(.caption)
+                                    .fontWeight(.bold)
+                                    .tracking(1.5)
+                                    .foregroundColor(Color.tasukiMutedText)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .foregroundColor(Color.tasukiMutedText)
+                            }
+
+                            HStack(spacing: 20) {
+                                ZStack {
+                                    Circle()
+                                        .stroke(Color.gray.opacity(0.2), lineWidth: 12)
+                                        .frame(width: 114, height: 114)
+                                    Circle()
+                                        .trim(from: 0, to: progress)
+                                        .stroke(
+                                            LinearGradient(
+                                                colors: [Color.tasukiAccentOrange, Color.royalBlue],
+                                                startPoint: .leading,
+                                                endPoint: .trailing
+                                            ),
+                                            style: StrokeStyle(lineWidth: 12, lineCap: .round)
+                                        )
+                                        .frame(width: 114, height: 114)
+                                        .rotationEffect(.degrees(-90))
+                                    Text("\(progressPercent)%")
+                                        .font(.system(size: 20, weight: .bold))
+                                        .foregroundColor(Color.tasukiPrimary)
+                                }
+
+                                VStack(alignment: .leading, spacing: 6) {
+                                    if isHealthKitLoading {
+                                        ProgressView()
+                                        Text("同期中...")
+                                            .font(.caption)
+                                            .foregroundColor(Color.tasukiMutedText)
+                                    } else {
+                                        Text(String(format: "%.1fkm", currentDistance))
+                                            .font(.system(size: 32, weight: .bold))
+                                            .foregroundColor(Color.tasukiPrimary)
+                                        Text("目標 \(Int(goalDistance))km")
+                                            .font(.subheadline)
+                                            .foregroundColor(Color.tasukiMutedText)
+                                        Text("ソース: \(selectedRunningDataSource.displayName)")
+                                            .font(.caption2)
+                                            .foregroundColor(Color.tasukiMutedText)
+                                    }
+                                }
+                                Spacer()
+                            }
+
+                            if let error = healthKitError {
+                                Text(error)
+                                    .font(.caption)
+                                    .foregroundColor(Color.tasukiAccentOrange)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(18)
+                        .background(
+                            RoundedRectangle(cornerRadius: 20)
+                                .fill(Color.white)
+                                .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 3)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isHealthKitLoading)
+
+                    HStack(spacing: 12) {
+                        quickMetricCard(
+                            title: "TOTAL POINTS",
+                            value: "\(PointService.shared.currentTotalPoints())",
+                            suffix: "pt",
+                            icon: "flame.fill"
+                        )
+                        quickMetricCard(
+                            title: "DATA SOURCE",
+                            value: selectedRunningDataSource.displayName,
+                            suffix: "",
+                            icon: "waveform.path.ecg"
+                        )
+                    }
+
+                    VStack(spacing: 10) {
+                        HStack(spacing: 10) {
+                            NavigationLink(destination: RunRecordingView()) {
+                                quickActionCard(
+                                    title: "RUN RECORDER",
+                                    subtitle: "走行を開始して記録",
+                                    icon: "figure.run"
+                                )
+                            }
+                            .buttonStyle(.plain)
+
+                            NavigationLink(destination: ChallengeHubView()) {
+                                quickActionCard(
+                                    title: "CHALLENGES",
+                                    subtitle: "月間目標と順位",
+                                    icon: "flag.checkered.2.crossed"
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+
+                        NavigationLink(destination: TrainingPlanView()) {
+                            HStack(spacing: 10) {
+                                Image(systemName: "calendar.badge.clock")
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundColor(Color.tasukiAccent)
+                                    .frame(width: 30)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("TRAINING PLAN")
+                                        .font(.system(size: 13, weight: .bold))
+                                        .foregroundColor(Color.tasukiPrimary)
+                                    Text("目標別の週間メニューを管理")
+                                        .font(.caption)
+                                        .foregroundColor(Color.tasukiMutedText)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundColor(Color.tasukiMutedText)
+                            }
+                            .padding(14)
+                            .background(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(Color.white)
+                                    .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 3)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    behaviorInsightsCard
+
+                    NavigationLink(destination: RankingView()) {
+                        Text("ランキングを確認する")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .fill(Color.tasukiPrimary)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 4)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(14)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color(hex: "F5F7FA"))
-                )
+                .padding(.horizontal, 16)
+                .padding(.top, 10)
+                .padding(.bottom, 80)
             }
-            .padding(.horizontal, 20)
-            
-            // 3. 保有ポイント（累計）表示
-            VStack(spacing: 5) {
-                Text("保有ポイント（累計）")
-                    .font(.caption)
-                    .fontWeight(.bold)
-                    .foregroundColor(.gray)
-                    .tracking(2)
-                
-                HStack(alignment: .lastTextBaseline, spacing: 5) {
-                    Text("\(PointService.shared.currentTotalPoints())")
-                        .font(.system(size: 44, weight: .bold))
-                        .foregroundColor(Color(hex: "0F1A2E"))
-                    
-                    Text("pt")
-                        .font(.title3)
-                        .fontWeight(.bold)
-                        .foregroundColor(.gray)
-                        .padding(.bottom, 4)
-                }
-                
-                NavigationLink(destination: RankingView()) {
-                    Text("ランキングを見る")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(Color(hex: "2E5CFF"))
-                        .padding(.top, 4)
-                }
-            }
-            .padding(.bottom, 50)
         }
-        .background(Color.white)
+        .sheet(isPresented: $showRunHistory) {
+            RunHistoryListView()
+        }
+        .sheet(isPresented: $showPracticeCalendar) {
+            PracticeScheduleCalendarView(store: joinedPracticesStore)
+        }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
@@ -231,13 +258,13 @@ struct HomeView: View {
                     ZStack(alignment: .topTrailing) {
                         Image(systemName: "calendar")
                             .font(.system(size: 20))
-                            .foregroundColor(Color(hex: "0F1A2E"))
+                            .foregroundColor(Color.tasukiPrimary)
                         if joinedPracticesStore.scheduledCount > 0 {
                             Text("\(min(joinedPracticesStore.scheduledCount, 99))")
                                 .font(.system(size: 10, weight: .bold))
                                 .foregroundColor(.white)
                                 .padding(4)
-                                .background(Circle().fill(Color(hex: "2E5CFF")))
+                                .background(Circle().fill(Color.tasukiAccentOrange))
                                 .offset(x: 8, y: -8)
                         }
                     }
@@ -248,13 +275,13 @@ struct HomeView: View {
                     ZStack(alignment: .topTrailing) {
                         Image(systemName: "message.fill")
                             .font(.system(size: 20))
-                            .foregroundColor(Color(hex: "0F1A2E"))
+                            .foregroundColor(Color.tasukiPrimary)
                         if unreadProvider.unreadCount > 0 {
                             Text("\(min(unreadProvider.unreadCount, 99))")
                                 .font(.system(size: 10, weight: .bold))
                                 .foregroundColor(.white)
                                 .padding(4)
-                                .background(Circle().fill(Color.red))
+                                .background(Circle().fill(Color.tasukiAccentOrange))
                                 .offset(x: 8, y: -8)
                         }
                     }
@@ -272,6 +299,112 @@ struct HomeView: View {
             behaviorFeatureManager.fetchLatestFeature()
         }
     }
+
+    private func quickMetricCard(title: String, value: String, suffix: String, icon: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Image(systemName: icon)
+                .foregroundColor(Color.tasukiAccentOrange)
+            Text(title)
+                .font(.caption2)
+                .foregroundColor(Color.tasukiMutedText)
+                .tracking(1)
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(value)
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(Color.tasukiPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                if !suffix.isEmpty {
+                    Text(suffix)
+                        .font(.caption)
+                        .foregroundColor(Color.tasukiMutedText)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.white)
+                .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 3)
+        )
+    }
+
+    private func quickActionCard(title: String, subtitle: String, icon: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundColor(Color.tasukiAccent)
+            Text(title)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(Color.tasukiPrimary)
+                .lineLimit(1)
+            Text(subtitle)
+                .font(.caption2)
+                .foregroundColor(Color.tasukiMutedText)
+                .lineLimit(2)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.white)
+                .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 3)
+        )
+    }
+
+    private var behaviorInsightsCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("BEHAVIOR INSIGHTS")
+                .font(.caption)
+                .fontWeight(.bold)
+                .tracking(1.5)
+                .foregroundColor(Color.tasukiMutedText)
+
+            Group {
+                if behaviorFeatureManager.isLoading {
+                    HStack {
+                        ProgressView()
+                        Text("行動特徴を読み込み中...")
+                            .foregroundColor(Color.tasukiMutedText)
+                    }
+                } else if let feature = behaviorFeatureManager.latestFeature {
+                    VStack(alignment: .leading, spacing: 6) {
+                        statRow("週間ラン回数", "\(feature.weeklyRunCount) 回")
+                        statRow("先週比", "\(feature.weeklyRunTrendDelta >= 0 ? "+" : "")\(feature.weeklyRunTrendDelta)")
+                        statRow("継続スコア", "\(Int(feature.consistencyScore * 100))/100")
+                        statRow("ソーシャル活動", "\(Int(feature.socialActivityScore * 100))/100")
+                        statRow("週末アクティブ比率", "\(Int(feature.weekendActivityRatio * 100))%")
+                    }
+                } else if let error = behaviorFeatureManager.errorMessage {
+                    Text("行動特徴の取得に失敗: \(error)")
+                        .foregroundColor(Color.tasukiAccentOrange)
+                } else {
+                    Text("行動特徴データがまだありません")
+                        .foregroundColor(Color.tasukiMutedText)
+                }
+            }
+            .font(.subheadline)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.white)
+                .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 3)
+        )
+    }
+
+    private func statRow(_ key: String, _ value: String) -> some View {
+        HStack {
+            Text(key)
+                .foregroundColor(Color.tasukiMutedText)
+            Spacer()
+            Text(value)
+                .foregroundColor(Color.tasukiPrimary)
+                .fontWeight(.semibold)
+        }
+    }
     
     /// HealthKit から今月の走行距離を取得して currentDistance に反映
     private func loadDistanceFromHealthKit() {
@@ -281,12 +414,16 @@ struct HomeView: View {
                 healthKitError = "HealthKit の利用を許可してください"
                 return
             }
-            HealthKitManager.shared.fetchRunningDistanceThisMonth { result in
+            HealthKitManager.shared.fetchRunningDistanceThisMonth(dataSource: selectedRunningDataSource) { result in
                 isHealthKitLoading = false
                 switch result {
                 case .success(let km):
                     currentDistance = km
-                    healthKitError = nil
+                    if km == 0, selectedRunningDataSource != .all {
+                        healthKitError = "\(selectedRunningDataSource.displayName) の記録が見つかりません"
+                    } else {
+                        healthKitError = nil
+                    }
                     // 距離ベースのランク昇格判定
                     RankPromotionManager.shared.evaluateMonthlyDistancePromotion(monthlyKm: km)
                 case .failure(let err):

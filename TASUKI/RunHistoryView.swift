@@ -115,11 +115,31 @@ private let sampleRunHistory: [RunHistoryEntry] = {
 // MARK: - Run History List View
 struct RunHistoryListView: View {
     @Environment(\.dismiss) var dismiss
-    var entries: [RunHistoryEntry] = sampleRunHistory
+    @ObservedObject private var activityStore = RunActivityStore.shared
+    var entries: [RunHistoryEntry]? = nil
+
+    private var resolvedEntries: [RunHistoryEntry] {
+        if let entries {
+            return entries.sorted { $0.date > $1.date }
+        }
+        let converted = activityStore.activities.map { activity in
+            RunHistoryEntry(
+                id: activity.id,
+                date: activity.startedAt,
+                distanceKm: activity.distanceKm,
+                pace: activity.paceLabel,
+                routeCoordinates: activity.route.map(\.coordinate)
+            )
+        }
+        if converted.isEmpty {
+            return sampleRunHistory
+        }
+        return converted.sorted { $0.date > $1.date }
+    }
     
     var body: some View {
         NavigationStack {
-            List(entries) { entry in
+            List(resolvedEntries) { entry in
                 NavigationLink {
                     RunHistoryDetailView(entry: entry)
                 } label: {
@@ -127,28 +147,31 @@ struct RunHistoryListView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(formatDate(entry.date))
                                 .font(.subheadline)
-                                .foregroundColor(Color(hex: "0F1A2E"))
+                                .foregroundColor(Color.tasukiPrimary)
                             Text("\(String(format: "%.1f", entry.distanceKm)) km · \(entry.pace)")
                                 .font(.caption)
-                                .foregroundColor(.gray)
+                                .foregroundColor(Color.tasukiMutedText)
                         }
                         Spacer()
                         Image(systemName: "chevron.right")
                             .font(.caption)
-                            .foregroundColor(.gray)
+                            .foregroundColor(Color.tasukiMutedText)
                     }
                     .padding(.vertical, 4)
                 }
+                .listRowBackground(Color.white)
             }
             .listStyle(.insetGrouped)
-            .navigationTitle("走行履歴")
+            .scrollContentBackground(.hidden)
+            .background(Color.tasukiDarkBackground)
+            .navigationTitle("Activity")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("閉じる") {
                         dismiss()
                     }
-                    .foregroundColor(Color(hex: "2E5CFF"))
+                    .foregroundColor(Color.tasukiAccentOrange)
                 }
             }
         }
@@ -197,7 +220,7 @@ struct RunHistoryDetailView: View {
                     Text(formatDate(entry.date))
                         .font(.title2)
                         .fontWeight(.bold)
-                        .foregroundColor(Color(hex: "0F1A2E"))
+                        .foregroundColor(Color.tasukiPrimary)
                     
                     HStack(spacing: 24) {
                         labelValue(title: "距離", value: "\(String(format: "%.1f", entry.distanceKm)) km")
@@ -208,13 +231,14 @@ struct RunHistoryDetailView: View {
                 .padding()
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(Color(hex: "F5F7FA"))
+                        .fill(Color.white)
+                        .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 3)
                 )
                 
                 // 地図
                 Text("走行ルート")
                     .font(.headline)
-                    .foregroundColor(Color(hex: "0F1A2E"))
+                    .foregroundColor(Color.tasukiPrimary)
                 
                 RunHistoryMapView(coordinates: entry.routeCoordinates, region: mapRegion)
                     .frame(height: 280)
@@ -222,7 +246,7 @@ struct RunHistoryDetailView: View {
             }
             .padding()
         }
-        .background(Color.white)
+        .background(Color.tasukiDarkBackground)
         .navigationTitle("走行詳細")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -238,11 +262,11 @@ struct RunHistoryDetailView: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title)
                 .font(.caption)
-                .foregroundColor(.gray)
+                .foregroundColor(Color.tasukiMutedText)
             Text(value)
                 .font(.body)
                 .fontWeight(.semibold)
-                .foregroundColor(Color(hex: "0F1A2E"))
+                .foregroundColor(Color.tasukiPrimary)
         }
     }
 }

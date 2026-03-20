@@ -25,8 +25,7 @@ struct CoachView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                // 背景色: White
-                Color.white
+                Color.tasukiDarkBackground
                     .ignoresSafeArea()
                 
                 ScrollView {
@@ -35,7 +34,37 @@ struct CoachView: View {
                         headerView
                             .padding(.horizontal, 20)
                             .padding(.top, 32)   // EKIDEN MODE と同程度の位置に調整
-                            .padding(.bottom, 16)
+                            .padding(.bottom, 12)
+
+                        NavigationLink(destination: CoachProgramView()) {
+                            HStack(spacing: 10) {
+                                Image(systemName: "book.pages.fill")
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundColor(Color.tasukiAccent)
+                                    .frame(width: 28)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text("COACH PROGRAM")
+                                        .font(.system(size: 13, weight: .bold))
+                                        .foregroundColor(Color.tasukiPrimary)
+                                    Text("目標別の実践プログラムを見る")
+                                        .font(.caption)
+                                        .foregroundColor(Color.tasukiMutedText)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundColor(Color.tasukiMutedText)
+                            }
+                            .padding(14)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .fill(Color.white)
+                                    .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 3)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 12)
                         
                         // カテゴリフィルタ
                         categoryFilterView
@@ -65,7 +94,7 @@ struct CoachView: View {
                         .foregroundColor(.white)
                         .background(
                             Circle()
-                                .fill(Color(hex: "2E5CFF"))
+                                .fill(Color.tasukiAccentOrange)
                                 .frame(width: 56, height: 56)
                         )
                 }
@@ -100,11 +129,11 @@ struct CoachView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Coach")
                 .font(.system(size: 34, weight: .bold)) // Find / EKIDEN MODE に揃えたタイトルサイズ
-                .foregroundColor(Color(hex: "0F1A2E"))
+                .foregroundColor(Color.tasukiPrimary)
             
             Text("元箱根駅伝ランナーや実業団選手があなたの疑問に答えます")
                 .font(.system(size: 14, weight: .regular))
-                .foregroundColor(Color(hex: "0F1A2E").opacity(0.7))
+                .foregroundColor(Color.tasukiMutedText)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -127,12 +156,12 @@ struct CoachView: View {
         }) {
             Text(category)
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(selectedCategory == category ? .white : Color(hex: "0F1A2E"))
+                .foregroundColor(selectedCategory == category ? .white : Color.tasukiMutedText)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
                 .background(
                     Capsule()
-                        .fill(selectedCategory == category ? Color(hex: "2E5CFF") : Color(hex: "F5F7FA"))
+                        .fill(selectedCategory == category ? Color.tasukiAccentOrange : Color.tasukiDarkCard)
                 )
         }
     }
@@ -149,25 +178,25 @@ struct CoachView: View {
                     .padding(.vertical, 4)
                     .background(
                         Capsule()
-                            .fill(Color(hex: "2E5CFF"))
+                            .fill(Color.tasukiAccentOrange)
                     )
                 
                 Spacer()
                 
                 Text(formatDate(item.postedDate))
                     .font(.system(size: 12, weight: .regular))
-                    .foregroundColor(Color(hex: "0F1A2E").opacity(0.5))
+                    .foregroundColor(Color.tasukiMutedText)
             }
             
             // 質問
             VStack(alignment: .leading, spacing: 4) {
                 Text("Q")
                     .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(Color(hex: "2E5CFF"))
+                    .foregroundColor(Color.tasukiAccentOrange)
                 
                 Text(item.question)
                     .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(Color(hex: "0F1A2E"))
+                    .foregroundColor(Color.tasukiPrimary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             
@@ -175,14 +204,14 @@ struct CoachView: View {
             HStack(spacing: 4) {
                 Text("質問者:")
                     .font(.system(size: 12, weight: .regular))
-                    .foregroundColor(Color(hex: "0F1A2E").opacity(0.6))
+                    .foregroundColor(Color.tasukiMutedText)
                 Text(item.askerName)
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(Color(hex: "0F1A2E").opacity(0.8))
+                    .foregroundColor(Color.tasukiPrimary)
             }
             
             Divider()
-                .background(Color(hex: "F5F7FA"))
+                .background(Color.tasukiDarkCardSecondary)
             
             // 回答
             if let answer = item.answer {
@@ -190,52 +219,51 @@ struct CoachView: View {
                     HStack(spacing: 4) {
                         Text("A")
                             .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(Color(hex: "0F1A2E").opacity(0.7))
+                            .foregroundColor(Color.tasukiMutedText)
                         
                         if let coachName = item.coachName {
                             NavigationLink(destination: CoachProfileView(coachName: coachName)) {
                                 Text(coachName)
                                     .font(.system(size: 12, weight: .semibold))
-                                    .foregroundColor(Color(hex: "2E5CFF"))
+                                    .foregroundColor(Color.tasukiAccentOrange)
                             }
                         }
                     }
                     
                     Text(answer)
                         .font(.system(size: 15, weight: .regular))
-                        .foregroundColor(Color(hex: "0F1A2E"))
+                        .foregroundColor(Color.tasukiPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(16)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(Color(hex: "F5F7FA"))
+                        .fill(Color.tasukiDarkCardSecondary)
                 )
             } else {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("A")
                         .font(.system(size: 12, weight: .bold))
-                        .foregroundColor(Color(hex: "0F1A2E").opacity(0.5))
+                        .foregroundColor(Color.tasukiMutedText)
                     
                     Text("Coachが回答を作成中...")
                         .font(.system(size: 15, weight: .regular))
-                        .foregroundColor(Color(hex: "0F1A2E").opacity(0.5))
+                        .foregroundColor(Color.tasukiMutedText)
                         .italic()
                 }
                 .padding(16)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(Color(hex: "F5F7FA").opacity(0.5))
+                        .fill(Color.tasukiDarkCardSecondary)
                 )
             }
         }
         .padding(20)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Color.white)
-                .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+                .fill(Color.tasukiDarkCard)
         )
     }
     
@@ -262,7 +290,7 @@ struct QuestionPostSheet: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color.white
+                Color.tasukiDarkBackground
                     .ignoresSafeArea()
                 
                 ScrollView {
@@ -271,7 +299,7 @@ struct QuestionPostSheet: View {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("カテゴリ")
                                 .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(Color(hex: "0F1A2E"))
+                                .foregroundColor(Color.tasukiPrimary)
                             
                             Picker("カテゴリ", selection: $selectedCategory) {
                                 ForEach(categories, id: \.self) { category in
@@ -287,16 +315,16 @@ struct QuestionPostSheet: View {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("質問内容")
                                 .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(Color(hex: "0F1A2E"))
+                                .foregroundColor(Color.tasukiPrimary)
                             
                             TextEditor(text: $questionText)
                                 .font(.system(size: 16))
-                                .foregroundColor(Color(hex: "0F1A2E"))
+                                .foregroundColor(Color.tasukiPrimary)
                                 .frame(height: 200)
                                 .padding(12)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color(hex: "F5F7FA"))
+                                        .fill(Color.tasukiDarkCard)
                                 )
                         }
                         .padding(.horizontal, 20)
@@ -312,7 +340,7 @@ struct QuestionPostSheet: View {
                     Button("キャンセル") {
                         onCancel()
                     }
-                    .foregroundColor(Color(hex: "0F1A2E"))
+                    .foregroundColor(Color.tasukiPrimary)
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -321,7 +349,7 @@ struct QuestionPostSheet: View {
                             onPost(questionText, selectedCategory)
                         }
                     }
-                    .foregroundColor(questionText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Color.gray : Color(hex: "2E5CFF"))
+                    .foregroundColor(questionText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Color.gray : Color.tasukiAccentOrange)
                     .fontWeight(.semibold)
                     .disabled(questionText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }

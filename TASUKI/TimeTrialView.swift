@@ -21,10 +21,14 @@ struct TimeTrialEntryView: View {
     
     var body: some View {
         NavigationStack {
-            VStack(spacing: 32) {
+            ZStack {
+                Color.tasukiDarkBackground
+                    .ignoresSafeArea()
+
+                VStack(spacing: 24) {
                 Text("距離を選んで同ランクの20名とマッチング")
                     .font(.subheadline)
-                    .foregroundColor(.gray)
+                    .foregroundColor(Color.tasukiMutedText)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
                 
@@ -37,15 +41,15 @@ struct TimeTrialEntryView: View {
                             Text(dist.displayName)
                                 .font(.title2)
                                 .fontWeight(.semibold)
-                                .foregroundColor(Color(hex: "0F1A2E"))
+                                .foregroundColor(Color.tasukiPrimary)
                             Spacer()
                             Image(systemName: "chevron.right")
-                                .foregroundColor(.gray)
+                                .foregroundColor(Color.tasukiMutedText)
                         }
                         .padding()
                         .background(
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(selectedDistance == dist ? Color(hex: "2E5CFF").opacity(0.15) : Color(hex: "F5F7FA"))
+                                .fill(selectedDistance == dist ? Color.tasukiAccentOrange.opacity(0.25) : Color.tasukiDarkCard)
                         )
                     }
                     .disabled(isMatching)
@@ -58,18 +62,19 @@ struct TimeTrialEntryView: View {
                 if let err = matchError {
                     Text(err)
                         .font(.caption)
-                        .foregroundColor(.red)
+                        .foregroundColor(Color.tasukiAccentOrange)
                 }
                 
                 Spacer()
             }
             .padding()
+            }
             .navigationTitle("タイムトライアル")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("閉じる") { dismiss() }
-                        .foregroundColor(Color(hex: "0F1A2E"))
+                        .foregroundColor(Color.tasukiPrimary)
                 }
             }
             .navigationDestination(item: $matchedRoomId) { roomId in
@@ -112,6 +117,7 @@ struct TimeTrialRoomView: View {
     @State private var healthKitWorkouts: [RunningWorkoutInfo] = []
     @State private var healthKitLoading = false
     @State private var healthKitError: String?
+    @AppStorage("runningDataSource") private var runningDataSourceRaw: String = RunningDataSource.all.rawValue
     
     private var myParticipant: TimeTrialParticipant? {
         manager.participants.first { $0.id == manager.currentUserId }
@@ -120,9 +126,17 @@ struct TimeTrialRoomView: View {
     private var hasSubmitted: Bool {
         myParticipant?.isSubmitted ?? false
     }
+
+    private var selectedRunningDataSource: RunningDataSource {
+        RunningDataSource(rawValue: runningDataSourceRaw) ?? .all
+    }
     
     var body: some View {
-        Group {
+        ZStack {
+            Color.tasukiDarkBackground
+                .ignoresSafeArea()
+
+            Group {
             if let room = manager.currentRoom {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
@@ -130,19 +144,19 @@ struct TimeTrialRoomView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             Text(room.periodLabel)
                                 .font(.subheadline)
-                                .foregroundColor(.gray)
+                                .foregroundColor(Color.tasukiMutedText)
                             Text("\(room.distanceKm.clean) km · Rank \(room.rankTier)")
                                 .font(.headline)
-                                .foregroundColor(Color(hex: "0F1A2E"))
+                                .foregroundColor(Color.tasukiPrimary)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding()
-                        .background(Color(hex: "F5F7FA"))
+                        .background(Color.tasukiDarkCard)
                         .cornerRadius(12)
                         
                         Text("参加者 \(manager.participants.count) / 20 名")
                             .font(.subheadline)
-                            .foregroundColor(.gray)
+                            .foregroundColor(Color.tasukiMutedText)
                         
                         if hasSubmitted {
                             Button(action: { loadRanking(); showResults = true }) {
@@ -154,7 +168,7 @@ struct TimeTrialRoomView: View {
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
                                 .padding()
-                                .background(Color(hex: "2E5CFF"))
+                                .background(Color.tasukiAccentOrange)
                                 .cornerRadius(12)
                             }
                         } else {
@@ -167,7 +181,7 @@ struct TimeTrialRoomView: View {
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
                                 .padding()
-                                .background(Color(hex: "0F1A2E"))
+                                .background(Color.tasukiPrimary)
                                 .cornerRadius(12)
                             }
                         }
@@ -176,20 +190,21 @@ struct TimeTrialRoomView: View {
                         Text("参加者一覧")
                             .font(.subheadline)
                             .fontWeight(.semibold)
-                            .foregroundColor(Color(hex: "0F1A2E"))
+                            .foregroundColor(Color.tasukiPrimary)
                         ForEach(manager.participants) { p in
                             HStack {
                                 Text(p.name)
                                     .font(.body)
+                                    .foregroundColor(Color.tasukiPrimary)
                                 Spacer()
                                 if let label = p.timeLabel {
                                     Text(label)
                                         .font(.subheadline)
-                                        .foregroundColor(.gray)
+                                        .foregroundColor(Color.tasukiMutedText)
                                 } else {
                                     Text("未記録")
                                         .font(.caption)
-                                        .foregroundColor(.gray)
+                                        .foregroundColor(Color.tasukiMutedText)
                                 }
                             }
                             .padding(.vertical, 4)
@@ -202,6 +217,7 @@ struct TimeTrialRoomView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        }
         .navigationTitle("タイムトライアル")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -211,7 +227,7 @@ struct TimeTrialRoomView: View {
                     onDismiss?()
                     dismiss()
                 }
-                .foregroundColor(Color(hex: "0F1A2E"))
+                .foregroundColor(Color.tasukiPrimary)
             }
         }
         .onAppear {
@@ -231,12 +247,15 @@ struct TimeTrialRoomView: View {
     
     private func timeSubmitSheet(room: TimeTrialRoom?) -> some View {
         NavigationStack {
-            Group {
+            ZStack {
+                Color.tasukiDarkBackground.ignoresSafeArea()
+                Group {
                 if recordSource == .choose {
                     recordSourceChoiceView(room: room)
                 } else {
                     healthKitWorkoutListView(room: room)
                 }
+            }
             }
             .navigationTitle("タイム記録")
             .navigationBarTitleDisplayMode(.inline)
@@ -244,14 +263,14 @@ struct TimeTrialRoomView: View {
                 ToolbarItem(placement: .topBarLeading) {
                     if recordSource != .choose {
                         Button("戻る") { recordSource = .choose }
-                            .foregroundColor(Color(hex: "0F1A2E"))
+                            .foregroundColor(Color.tasukiPrimary)
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("キャンセル") {
                         showSubmitSheet = false
                     }
-                    .foregroundColor(Color(hex: "0F1A2E"))
+                    .foregroundColor(Color.tasukiPrimary)
                 }
             }
         }
@@ -262,7 +281,7 @@ struct TimeTrialRoomView: View {
         VStack(spacing: 20) {
             Text("記録方法を選んでください")
                 .font(.headline)
-                .foregroundColor(Color(hex: "0F1A2E"))
+                .foregroundColor(Color.tasukiPrimary)
                 .padding(.top, 24)
             Button(action: {
                 HealthKitManager.shared.requestAuthorization { success, _ in
@@ -277,13 +296,13 @@ struct TimeTrialRoomView: View {
             }) {
                 HStack {
                     Image(systemName: "heart.fill")
-                    Text("ランの記録から選ぶ")
+                    Text("\(selectedRunningDataSource.displayName) の記録から選ぶ")
                 }
                 .font(.headline)
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
                 .padding()
-                .background(Color(hex: "2E5CFF"))
+                .background(Color.tasukiAccentOrange)
                 .cornerRadius(12)
             }
             .padding(.horizontal, 24)
@@ -303,12 +322,12 @@ struct TimeTrialRoomView: View {
         }
         let targetKm = room.distanceKm
         let minKm = targetKm * 0.9
-        HealthKitManager.shared.fetchRunningWorkouts(from: room.periodStart, to: room.periodEnd, minDistanceKm: minKm, targetDistanceKm: targetKm) { result in
+        HealthKitManager.shared.fetchRunningWorkouts(from: room.periodStart, to: room.periodEnd, minDistanceKm: minKm, targetDistanceKm: targetKm, dataSource: selectedRunningDataSource) { result in
             healthKitLoading = false
             switch result {
             case .success(let list):
                 healthKitWorkouts = list
-                if list.isEmpty { healthKitError = "この期間に条件を満たすランがありません" }
+                if list.isEmpty { healthKitError = "\(selectedRunningDataSource.displayName) で条件を満たすランがありません" }
             case .failure(let e):
                 healthKitError = e.localizedDescription
                 healthKitWorkouts = []
@@ -365,7 +384,7 @@ struct TimeTrialRoomView: View {
             } else if let err = healthKitError, healthKitWorkouts.isEmpty {
                 Text(err)
                     .font(.subheadline)
-                    .foregroundColor(.gray)
+                    .foregroundColor(Color.tasukiMutedText)
                     .multilineTextAlignment(.center)
                     .padding()
                 Spacer()
@@ -390,20 +409,20 @@ struct TimeTrialRoomView: View {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(formatWorkoutDate(info.startDate))
                                         .font(.subheadline)
-                                        .foregroundColor(.gray)
+                                        .foregroundColor(Color.tasukiMutedText)
                                     Text("\(String(format: "%.2f", info.totalDistanceKm)) km")
                                         .font(.caption)
-                                        .foregroundColor(.gray)
+                                        .foregroundColor(Color.tasukiMutedText)
                                 }
                                 Spacer()
                                 Text(timeLabel)
                                     .font(.subheadline)
                                     .fontWeight(.medium)
-                                    .foregroundColor(canSubmit ? Color(hex: "0F1A2E") : .gray)
+                                    .foregroundColor(canSubmit ? Color.tasukiPrimary : Color.tasukiMutedText)
                                 if canSubmit {
                                     Image(systemName: "chevron.right")
                                         .font(.caption)
-                                        .foregroundColor(.gray)
+                                        .foregroundColor(Color.tasukiMutedText)
                                 }
                             }
                             .padding(.vertical, 4)
@@ -412,6 +431,8 @@ struct TimeTrialRoomView: View {
                     }
                 }
                 .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .background(Color.tasukiDarkBackground)
             }
         }
     }
@@ -444,25 +465,30 @@ struct TimeTrialRoomView: View {
                     HStack {
                         Text("\(entry.rank)位")
                             .font(.headline)
+                            .foregroundColor(Color.tasukiPrimary)
                             .frame(width: 36, alignment: .leading)
                         Text(entry.name)
+                            .foregroundColor(Color.tasukiPrimary)
                         Spacer()
                         Text(entry.timeLabel)
-                            .foregroundColor(.gray)
+                            .foregroundColor(Color.tasukiMutedText)
                         Text("+\(entry.points)pt")
                             .font(.subheadline)
                             .fontWeight(.semibold)
-                            .foregroundColor(Color(hex: "2E5CFF"))
+                            .foregroundColor(Color.tasukiAccentOrange)
                             .frame(width: 50, alignment: .trailing)
                     }
+                    .listRowBackground(Color.tasukiDarkCard)
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(Color.tasukiDarkBackground)
             .navigationTitle("結果")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("閉じる") { showResults = false }
-                        .foregroundColor(Color(hex: "0F1A2E"))
+                        .foregroundColor(Color.tasukiPrimary)
                 }
             }
         }

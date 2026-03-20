@@ -10,6 +10,7 @@ import SwiftUI
 // MARK: - Home View
 struct ContentView: View {
     @AppStorage("myMonthlyDist") private var monthlyDistance: String = "0km"
+    @AppStorage("runningDataSource") private var runningDataSourceRaw: String = RunningDataSource.all.rawValue
     @State private var currentKilo: Int = 12500
     
     var body: some View {
@@ -149,6 +150,10 @@ struct ContentView: View {
     }
     
     // MARK: - Helper
+    private var selectedRunningDataSource: RunningDataSource {
+        RunningDataSource(rawValue: runningDataSourceRaw) ?? .all
+    }
+
     private func formatKilo(_ kilo: Int) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
@@ -175,7 +180,7 @@ struct ContentView: View {
                 return
             }
             
-            HealthKitManager.shared.fetchRunningDistanceThisMonth { result in
+            HealthKitManager.shared.fetchRunningDistanceThisMonth(dataSource: selectedRunningDataSource) { result in
                 switch result {
                 case .success(let kilometers):
                     // 小数1桁までで表示（例: 12.3km）

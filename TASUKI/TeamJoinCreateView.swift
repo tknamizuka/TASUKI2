@@ -25,43 +25,48 @@ struct TeamJoinCreateView: View {
     }
     
     var body: some View {
-        VStack(spacing: 24) {
-            Spacer()
-            
-            Text("チームに所属していません")
-                .font(.system(size: 20, weight: .bold))
-                .foregroundColor(Color(hex: "0F1A2E"))
-            
-            Text("EKIDENに参加するにはチームに参加するか、新しくチームを作成してください。")
-                .font(.system(size: 14))
-                .foregroundColor(Color(hex: "0F1A2E").opacity(0.7))
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 24)
-            
-            VStack(spacing: 12) {
-                Button(action: { showSearchForm = true }) {
-                    HStack { Spacer(); Text("チームを探す").foregroundColor(.white); Spacer() }
-                        .padding()
-                        .background(RoundedRectangle(cornerRadius: 10).fill(Color(hex: "2E5CFF")))
+        ZStack {
+            Color.tasukiDarkBackground
+                .ignoresSafeArea()
+
+            VStack(spacing: 24) {
+                Spacer()
+                
+                Text("チームに所属していません")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(Color.tasukiPrimary)
+                
+                Text("EKIDENに参加するにはチームに参加するか、新しくチームを作成してください。")
+                    .font(.system(size: 14))
+                    .foregroundColor(Color.tasukiMutedText)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+                
+                VStack(spacing: 12) {
+                    Button(action: { showSearchForm = true }) {
+                        HStack { Spacer(); Text("チームを探す").foregroundColor(.white); Spacer() }
+                            .padding()
+                            .background(RoundedRectangle(cornerRadius: 10).fill(Color.tasukiAccentOrange))
+                    }
+                    
+                    Button(action: { showCreateForm = true }) {
+                        HStack { Spacer(); Text("チームをつくる").foregroundColor(.white); Spacer() }
+                            .padding()
+                            .background(RoundedRectangle(cornerRadius: 10).fill(Color.tasukiPrimary))
+                    }
+                }
+                .padding(.horizontal, 40)
+                
+                if let err = errorMessage {
+                    Text(err)
+                        .foregroundColor(Color.tasukiAccentOrange)
+                        .font(.system(size: 13))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 30)
                 }
                 
-                Button(action: { showCreateForm = true }) {
-                    HStack { Spacer(); Text("チームをつくる").foregroundColor(.white); Spacer() }
-                        .padding()
-                        .background(RoundedRectangle(cornerRadius: 10).fill(Color(hex: "0F1A2E")))
-                }
+                Spacer()
             }
-            .padding(.horizontal, 40)
-            
-            if let err = errorMessage {
-                Text(err)
-                    .foregroundColor(.red)
-                    .font(.system(size: 13))
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 30)
-            }
-            
-            Spacer()
         }
         .sheet(isPresented: $showCreateForm) {
             NavigationStack {

@@ -158,6 +158,9 @@ struct TASUKIApp: App {
         withAnimation {
             self.appState = nextState
         }
+        if nextState == .main {
+            PointService.shared.syncFromRemoteIfNeeded()
+        }
     }
     
     /// ユーザー状態判定ロジック（ヘルパー）
@@ -194,6 +197,9 @@ struct TASUKIApp: App {
         let nextState = await checkUserStatus()
         withAnimation {
             self.appState = nextState
+        }
+        if nextState == .main {
+            PointService.shared.syncFromRemoteIfNeeded()
         }
     }
 }

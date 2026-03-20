@@ -2,6 +2,7 @@
 
 const admin = require("firebase-admin");
 const {onSchedule} = require("firebase-functions/v2/scheduler");
+const {onDocumentUpdated} = require("firebase-functions/v2/firestore");
 const {logger} = require("firebase-functions");
 
 admin.initializeApp();
@@ -68,6 +69,249 @@ function median(numbers) {
   }
   return sorted[mid];
 }
+
+const RACE_POSITION_POINTS = [500, 400, 320, 260, 212, 170, 136, 109, 87, 70];
+const RACE_FINISH_BONUS = 100;
+const RACE_PARTICIPATION_BONUS = 50;
+const TIME_TRIAL_POINTS_TABLE = [
+  100, 90, 81, 73, 66, 59, 53, 48, 43, 39,
+  35, 31, 28, 25, 22, 20, 18, 16, 14, 12,
+];
+
+function racePointsByRank(rank) {
+  const positionPoint = rank <= RACE_POSITION_POINTS.length ? RACE_POSITION_POINTS[rank - 1] : 0;
+  return positionPoint + RACE_FINISH_BONUS + RACE_PARTICIPATION_BONUS;
+}
+
+function timeTrialPointsByRank(rank) {
+  return rank <= TIME_TRIAL_POINTS_TABLE.length ? TIME_TRIAL_POINTS_TABLE[rank - 1] : 0;
+}
+
+async function awardRacePointsForParticipant({
+  raceId,
+  participantId,
+  participantName,
+  rank,
+  amount,
+}) {
+  const awardRef = db
+      .collection("races")
+      .doc(raceId)
+      .collection("awards")
+      .doc(participantId);
+  const userRef = db.collection("users").doc(participantId);
+
+  return db.runTransaction(async (tx) => {
+    const awardSnap = await tx.get(awardRef);
+    if (awardSnap.exists) {
+      return false;
+    }
+
+    tx.set(awardRef, {
+      userId: participantId,
+      userName: participantName,
+      rank,
+      points: amount,
+      awardedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, {merge: true});
+
+    tx.set(userRef, {
+      totalPoints: admin.firestore.FieldValue.increment(amount),
+      monthlyPoints: admin.firestore.FieldValue.increment(amount),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, {merge: true});
+
+    const userSnap = await tx.get(userRef);
+    const teamId = userSnap.data()?.teamId;
+    if (typeof teamId === "string" && teamId.length > 0) {
+      const teamRef = db.collection("teams").doc(teamId);
+      tx.set(teamRef, {
+        teamTotalPoints: admin.firestore.FieldValue.increment(amount),
+        teamMonthlyPoints: admin.firestore.FieldValue.increment(amount),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, {merge: true});
+    }
+
+    return true;
+  });
+}
+
+exports.awardRacePointsOnFinish = onDocumentUpdated(
+    {
+      document: "races/{raceId}",
+      region: "asia-northeast1",
+      memory: "512MiB",
+    },
+    async (event) => {
+      const before = event.data?.before?.data();
+      const after = event.data?.after?.data();
+      const raceId = event.params.raceId;
+      if (!before || !after || !raceId) {
+        return;
+      }
+      if (before.status === "finished" || after.status !== "finished") {
+        return;
+      }
+
+      logger.info("race points awarding started", {raceId});
+
+      const participantsSnap = await db
+          .collection("races")
+          .doc(raceId)
+          .collection("participants")
+          .get();
+      const finishers = participantsSnap.docs
+          .map((doc) => ({id: doc.id, ...doc.data()}))
+          .filter((p) => typeof p.finishTimeSeconds === "number" && p.finishTimeSeconds > 0)
+          .sort((a, b) => a.finishTimeSeconds - b.finishTimeSeconds);
+
+      let awardedCount = 0;
+      for (let i = 0; i < finishers.length; i += 1) {
+        const rank = i + 1;
+        const p = finishers[i];
+        const amount = racePointsByRank(rank);
+        const awarded = await awardRacePointsForParticipant({
+          raceId,
+          participantId: p.id,
+          participantName: p.name || "Runner",
+          rank,
+          amount,
+        });
+        if (awarded) {
+          awardedCount += 1;
+        }
+      }
+
+      logger.info("race points awarding completed", {
+        raceId,
+        finishers: finishers.length,
+        awardedCount,
+      });
+    },
+);
+
+async function awardTimeTrialPointsForParticipant({
+  roomId,
+  participantId,
+  participantName,
+  rank,
+  amount,
+}) {
+  const awardRef = db
+      .collection("time_trial_rooms")
+      .doc(roomId)
+      .collection("awards")
+      .doc(participantId);
+  const userRef = db.collection("users").doc(participantId);
+
+  return db.runTransaction(async (tx) => {
+    const awardSnap = await tx.get(awardRef);
+    if (awardSnap.exists) {
+      return false;
+    }
+
+    tx.set(awardRef, {
+      userId: participantId,
+      userName: participantName,
+      rank,
+      points: amount,
+      awardedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, {merge: true});
+
+    tx.set(userRef, {
+      totalPoints: admin.firestore.FieldValue.increment(amount),
+      monthlyPoints: admin.firestore.FieldValue.increment(amount),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, {merge: true});
+
+    const userSnap = await tx.get(userRef);
+    const teamId = userSnap.data()?.teamId;
+    if (typeof teamId === "string" && teamId.length > 0) {
+      const teamRef = db.collection("teams").doc(teamId);
+      tx.set(teamRef, {
+        teamTotalPoints: admin.firestore.FieldValue.increment(amount),
+        teamMonthlyPoints: admin.firestore.FieldValue.increment(amount),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, {merge: true});
+    }
+
+    return true;
+  });
+}
+
+exports.settleTimeTrialRooms = onSchedule(
+    {
+      schedule: "every 30 minutes",
+      timeZone: "Asia/Tokyo",
+      region: "asia-northeast1",
+      memory: "512MiB",
+    },
+    async () => {
+      const now = admin.firestore.Timestamp.fromDate(new Date());
+      const roomSnap = await db.collection("time_trial_rooms")
+          .where("periodEnd", "<=", now)
+          .limit(50)
+          .get();
+      if (roomSnap.empty) {
+        return;
+      }
+
+      logger.info("time trial settlement started", {rooms: roomSnap.size});
+
+      for (const roomDoc of roomSnap.docs) {
+        const roomId = roomDoc.id;
+        const roomData = roomDoc.data();
+        if (roomData.settledAt) {
+          continue;
+        }
+        try {
+          const participantsSnap = await db.collection("time_trial_rooms")
+              .doc(roomId)
+              .collection("participants")
+              .get();
+          const finishers = participantsSnap.docs
+              .map((doc) => ({id: doc.id, ...doc.data()}))
+              .filter((p) => typeof p.submittedTimeSeconds === "number" && p.submittedTimeSeconds > 0)
+              .sort((a, b) => a.submittedTimeSeconds - b.submittedTimeSeconds)
+              .slice(0, 20);
+
+          let awardedCount = 0;
+          for (let i = 0; i < finishers.length; i += 1) {
+            const rank = i + 1;
+            const p = finishers[i];
+            const amount = timeTrialPointsByRank(rank);
+            const awarded = await awardTimeTrialPointsForParticipant({
+              roomId,
+              participantId: p.id,
+              participantName: p.name || "Runner",
+              rank,
+              amount,
+            });
+            if (awarded) {
+              awardedCount += 1;
+            }
+          }
+
+          await db.collection("time_trial_rooms").doc(roomId).set({
+            settledAt: admin.firestore.FieldValue.serverTimestamp(),
+            settledParticipantCount: finishers.length,
+            awardedCount,
+          }, {merge: true});
+
+          logger.info("time trial room settled", {
+            roomId,
+            finishers: finishers.length,
+            awardedCount,
+          });
+        } catch (error) {
+          logger.error("time trial settlement failed", {
+            roomId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+    },
+);
 
 exports.aggregateBehaviorFeaturesDaily = onSchedule(
     {

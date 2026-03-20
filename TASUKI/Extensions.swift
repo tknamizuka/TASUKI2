@@ -7,6 +7,12 @@ extension Color {
     static let tasukiSurface = Color(hex: "F5F7FA")   // Light Gray (Card Background)
     static let tasukiAccent = Color(hex: "2E5CFF")    // Royal Blue
     static let tasukiDanger = Color(hex: "FF453A")    // System Red
+    // 以前のダーク名を残しつつ、白ベース＋紺系トーンにマップ
+    static let tasukiDarkBackground = Color(hex: "FFFFFF")
+    static let tasukiDarkCard = Color(hex: "FFFFFF")
+    static let tasukiDarkCardSecondary = Color(hex: "F5F7FA")
+    static let tasukiMutedText = Color(hex: "6B7280")
+    static let tasukiAccentOrange = Color(hex: "2E5CFF")
     
     // 互換性のためのエイリアス（既存コードとの互換性を保つため）
     static let royalBlue = Color(hex: "2E5CFF")       // Accent (tasukiAccentと同じ)
@@ -37,6 +43,25 @@ extension Color {
             blue: Double(b) / 255,
             opacity: Double(a) / 255
         )
+    }
+}
+
+enum TasukiUI {
+    static let cardCorner: CGFloat = 16
+    static let cardPadding: CGFloat = 16
+    static let sectionSpacing: CGFloat = 14
+    static let iconSize: CGFloat = 20
+}
+
+extension View {
+    func tasukiCard(corner: CGFloat = TasukiUI.cardCorner) -> some View {
+        self
+            .padding(TasukiUI.cardPadding)
+            .background(
+                RoundedRectangle(cornerRadius: corner)
+                    .fill(Color.white)
+                    .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 3)
+            )
     }
 }
 

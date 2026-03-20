@@ -4,298 +4,60 @@ import FirebaseFirestore
 
 struct MyProfileView: View {
     @EnvironmentObject var authManager: AuthManager
-    // 保存データを読み込み
+    @Environment(\.openURL) private var openURL
+
     @AppStorage("myName") private var name: String = "Hiro"
-    @AppStorage("myAge") private var age: String = "29"
     @AppStorage("myArea") private var area: String = "Tokyo, Setagaya"
     @AppStorage("myRank") private var rank: String = "Rank A"
-    @AppStorage("myGender") private var gender: String = "male"
-    
-    // Running Style
     @AppStorage("myPurpose") private var purpose: String = "サブ3, 健康維持"
     @AppStorage("myRunningSpots") private var runningSpots: String = "皇居, 代々木公園"
     @AppStorage("mySchedule") private var schedule: String = "平日夜, 土日午前"
-    
-    // Records & Goals
     @AppStorage("myPersonalBest") private var personalBest: String = "Full 3:10:00"
     @AppStorage("myTargetTime") private var targetTime: String = "Full 2:59:00"
     @AppStorage("myNextRace") private var nextRace: String = "東京マラソン2026"
-    
-    // Stats
     @AppStorage("myAvgPace") private var avgPace: String = "5:30/km"
     @AppStorage("myMonthlyDist") private var monthlyDist: String = "150km"
     @AppStorage("myTotalPoints") private var myTotalPoints: Int = 0
     @AppStorage("realityMiningConsentEnabled") private var realityMiningConsentEnabled: Bool = false
-    
-    // Bio
+    @AppStorage("runningDataSource") private var runningDataSourceRaw: String = RunningDataSource.all.rawValue
     @AppStorage("myBio") private var bio: String = "平日は仕事終わりに5-10km走ってます！週末は距離走やりたいです。"
+
     @State private var userUUID: String = ""
     @State private var showCopiedToast: Bool = false
+    @State private var integrationNotice: String?
 
     private var myBadgeTier: PointBadgeTier? {
         PointBadgeHelper.tier(forTotalPoints: myTotalPoints)
     }
 
+    private var selectedRunningDataSource: RunningDataSource {
+        RunningDataSource(rawValue: runningDataSourceRaw) ?? .all
+    }
+
+    private var runningSpotTags: [String] {
+        runningSpots.components(separatedBy: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
-                // 背景色: White
-                Color.white
-                    .ignoresSafeArea()
-                
+                Color.tasukiBase.ignoresSafeArea()
+
                 ScrollView {
-                    VStack(spacing: 24) {
-                        // A. ヘッダー
-                        VStack(spacing: 16) {
-                            // アバター画像（大）
-                            Image(systemName: "person.crop.circle.fill")
-                                .font(.system(size: 120))
-                                .foregroundColor(Color(hex: "0F1A2E"))
-                                .saturation(0)
-                                .frame(width: 180, height: 180)
-                                .background(
-                                    Circle()
-                                        .fill(Color(hex: "F5F7FA"))
-                                )
-                                .overlay(
-                                    Circle()
-                                        .stroke(Color.royalBlue.opacity(0.3), lineWidth: 3)
-                                )
-                            
-                            // 名前、バッジ名・ランク、UUID
-                            VStack(spacing: 12) {
-                                // 名前 + カラーのカプセルバッジ
-                                HStack(spacing: 10) {
-                                    Text(name)
-                                        .font(.system(size: 28, weight: .bold))
-                                        .foregroundColor(Color(hex: "0F1A2E"))
-                                        .lineLimit(1)
-                                        .minimumScaleFactor(0.8)
-                                    if let tier = myBadgeTier {
-                                        HStack(spacing: 5) {
-                                            Image(systemName: tier.iconName)
-                                                .font(.system(size: 12, weight: .semibold))
-                                            Text(tier.displayName)
-                                                .font(.system(size: 13, weight: .semibold))
-                                        }
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 6)
-                                        .background(Capsule().fill(tier.color))
-                                    }
-                                }
-                                .frame(maxWidth: .infinity, alignment: .center)
-
-                                // ランク（カプセル）
-                                Text(rank)
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 14)
-                                    .padding(.vertical, 8)
-                                    .background(Capsule().fill(Color.royalBlue))
-                                    .frame(maxWidth: .infinity, alignment: .center)
-
-                                // 保有ポイント（累計）
-                                HStack(spacing: 4) {
-                                    Text("保有ポイント（累計）")
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundColor(Color(hex: "0F1A2E").opacity(0.6))
-                                    Text("\(PointService.shared.currentTotalPoints())")
-                                        .font(.system(size: 16, weight: .bold))
-                                        .foregroundColor(Color(hex: "0F1A2E"))
-                                    Text("pt")
-                                        .font(.system(size: 12, weight: .semibold))
-                                        .foregroundColor(Color(hex: "0F1A2E").opacity(0.6))
-                                }
-
-                                // UUID + コピー
-                                HStack(spacing: 8) {
-                                    Spacer(minLength: 0)
-                                    Text(userUUID.isEmpty ? "—" : userUUID)
-                                        .font(.system(size: 12, weight: .regular))
-                                        .foregroundColor(Color(hex: "0F1A2E").opacity(0.8))
-                                        .lineLimit(1)
-                                        .truncationMode(.middle)
-
-                                    // コピーボタン（テキストのすぐ右）
-                                    Button(action: {
-                                        guard !userUUID.isEmpty else { return }
-                                        UIPasteboard.general.string = userUUID
-                                        showCopiedToast = true
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                                            showCopiedToast = false
-                                        }
-                                    }) {
-                                        Image(systemName: "doc.on.doc")
-                                            .foregroundColor(Color(hex: "0F1A2E"))
-                                    }
-                                    Spacer(minLength: 40)
-                                }
-
-                                // エリア（従来の表示）
-                                HStack(spacing: 6) {
-                                    Image(systemName: "mappin.and.ellipse")
-                                        .font(.system(size: 12))
-                                    Text(area)
-                                        .font(.system(size: 14, weight: .regular))
-                                }
-                                .foregroundColor(Color(hex: "0F1A2E").opacity(0.7))
-                            }
-                        }
-                        .padding(.top, 20)
-                        .padding(.bottom, 8)
-                        
-                        // B. タグセクション
-                        VStack(alignment: .leading, spacing: 12) {
-                            // Purpose タグ
-                            HStack {
-                                Text("目的")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(Color(hex: "0F1A2E").opacity(0.7))
-                                Spacer()
-                            }
-                            
-                            HStack(spacing: 8) {
-                                tagView(text: purpose, isPrimary: true)
-                                Spacer()
-                            }
-                            
-                            // Running Spots タグ
-                            if !runningSpots.isEmpty {
-                                HStack {
-                                    Text("Run Spots")
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundColor(Color(hex: "0F1A2E").opacity(0.7))
-                                    Spacer()
-                                }
-                                .padding(.top, 8)
-                                
-                                let spots = runningSpots.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-                                
-                                FlowLayout(spacing: 8) {
-                                    ForEach(spots, id: \.self) { spot in
-                                        tagView(text: spot, isPrimary: false)
-                                    }
-                                }
-                            }
-                        }
-                        .padding(.horizontal, 20)
-                        
-                        // C. メイン情報グリッド (Info Cards)
-                        VStack(spacing: 12) {
-                            infoCardView(
-                                icon: "trophy.fill",
-                                title: "Personal Best",
-                                value: personalBest
-                            )
-                            
-                            infoCardView(
-                                icon: "calendar",
-                                title: "Schedule",
-                                value: schedule
-                            )
-                            
-                            if !nextRace.isEmpty {
-                                infoCardView(
-                                    icon: "flag.fill",
-                                    title: "Next Race",
-                                    value: nextRace
-                                )
-                            }
-                            
-                            if !targetTime.isEmpty {
-                                infoCardView(
-                                    icon: "scope",
-                                    title: "Target",
-                                    value: targetTime
-                                )
-                            }
-                        }
-                        .padding(.horizontal, 20)
-                        
-                        // D. ランニング統計 (Stats)
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Running Stats")
-                                .font(.system(size: 18, weight: .bold))
-                                .foregroundColor(Color(hex: "0F1A2E"))
-                                .padding(.horizontal, 20)
-                            
-                            HStack(spacing: 12) {
-                                statCardView(title: "Avg Pace", value: avgPace)
-                                statCardView(title: "Monthly Dist", value: monthlyDist)
-                            }
-                            .padding(.horizontal, 20)
-                        }
-                        .padding(.top, 8)
-                        
-                        // E. 自己紹介 (About Me)
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("About Me")
-                                .font(.system(size: 18, weight: .bold))
-                                .foregroundColor(Color(hex: "0F1A2E"))
-                                .padding(.horizontal, 20)
-                            
-                            Text(bio)
-                                .font(.system(size: 16, weight: .regular))
-                                .foregroundColor(Color(hex: "0F1A2E").opacity(0.7))
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(16)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color(hex: "F5F7FA"))
-                                )
-                                .padding(.horizontal, 20)
-                        }
-                        .padding(.top, 8)
-
-                        // F. Reality Mining 設定
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Reality Mining")
-                                .font(.system(size: 18, weight: .bold))
-                                .foregroundColor(Color(hex: "0F1A2E"))
-                                .padding(.horizontal, 20)
-
-                            Toggle(isOn: $realityMiningConsentEnabled) {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("行動データ収集を許可")
-                                        .font(.system(size: 16, weight: .semibold))
-                                        .foregroundColor(Color(hex: "0F1A2E"))
-                                    Text("推奨精度向上のために、画面利用やランニング関連イベントを収集します。")
-                                        .font(.system(size: 12, weight: .regular))
-                                        .foregroundColor(Color(hex: "0F1A2E").opacity(0.6))
-                                }
-                            }
-                            .tint(Color.royalBlue)
-                            .padding(16)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(Color.white)
-                                    .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
-                            )
-                            .padding(.horizontal, 20)
-                        }
-                        .padding(.top, 8)
-                        
-                        // G. ログアウトボタン
-                        Button(action: {
-                            authManager.signOut { result in
-                                if case let .failure(error) = result {
-                                    print("Sign out failed: \(error.localizedDescription)")
-                                }
-                            }
-                        }) {
-                            Text("ログアウト")
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundColor(.red)
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(Color.white)
-                                .cornerRadius(10)
-                                .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 40)
+                    VStack(spacing: TasukiUI.sectionSpacing) {
+                        heroCard
+                        statsCard
+                        profileCard
+                        aboutCard
+                        realityMiningCard
+                        integrationCard
+                        logoutButton
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 10)
+                    .padding(.bottom, 36)
                 }
             }
             .navigationTitle("Me")
@@ -304,13 +66,11 @@ struct MyProfileView: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     NavigationLink(destination: ProfileEditView()) {
                         Image(systemName: "pencil")
-                            .foregroundColor(Color(hex: "2E5CFF"))
+                            .foregroundColor(Color.tasukiPrimary)
                     }
                 }
             }
-            .task {
-                loadUserUUID()
-            }
+            .task { loadUserUUID() }
             .onChange(of: realityMiningConsentEnabled) { newValue in
                 RealityMiningManager.shared.updateConsent(enabled: newValue)
             }
@@ -329,10 +89,284 @@ struct MyProfileView: View {
         }
     }
 
+    private var heroCard: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "person.crop.circle.fill")
+                .font(.system(size: 96))
+                .foregroundColor(Color.tasukiPrimary)
+                .frame(width: 140, height: 140)
+                .background(Circle().fill(Color.tasukiSurface))
+
+            HStack(spacing: 8) {
+                Text(name)
+                    .font(.system(size: 28, weight: .bold))
+                    .foregroundColor(Color.tasukiPrimary)
+                if let tier = myBadgeTier {
+                    HStack(spacing: 4) {
+                        Image(systemName: tier.iconName)
+                        Text(tier.displayName)
+                    }
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Capsule().fill(Color.tasukiAccent))
+                }
+            }
+
+            Text(rank)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background(Capsule().fill(Color.tasukiPrimary))
+
+            HStack(spacing: 5) {
+                Text("保有ポイント")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(Color.tasukiMutedText)
+                Text("\(PointService.shared.currentTotalPoints())pt")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(Color.tasukiPrimary)
+            }
+
+            HStack(spacing: 8) {
+                Text(userUUID.isEmpty ? "—" : userUUID)
+                    .font(.system(size: 12))
+                    .foregroundColor(Color.tasukiMutedText)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Button {
+                    guard !userUUID.isEmpty else { return }
+                    UIPasteboard.general.string = userUUID
+                    withAnimation(.easeInOut(duration: 0.2)) { showCopiedToast = true }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        withAnimation(.easeInOut(duration: 0.2)) { showCopiedToast = false }
+                    }
+                } label: {
+                    Image(systemName: "doc.on.doc")
+                        .foregroundColor(Color.tasukiPrimary)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .tasukiCard(corner: 20)
+    }
+
+    private var statsCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Running Stats")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(Color.tasukiPrimary)
+
+            HStack(spacing: 12) {
+                statItem(title: "Avg Pace", value: avgPace)
+                statItem(title: "Monthly Dist", value: monthlyDist)
+            }
+        }
+        .tasukiCard()
+    }
+
+    private var profileCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "mappin.and.ellipse")
+                Text(area)
+            }
+            .font(.subheadline)
+            .foregroundColor(Color.tasukiMutedText)
+
+            if !purpose.isEmpty {
+                tagView(text: purpose, isPrimary: true)
+            }
+
+            if !runningSpotTags.isEmpty {
+                FlowLayout(spacing: 8) {
+                    ForEach(runningSpotTags, id: \.self) { spot in
+                        tagView(text: spot, isPrimary: false)
+                    }
+                }
+            }
+
+            infoRow(icon: "trophy.fill", title: "Personal Best", value: personalBest)
+            infoRow(icon: "calendar", title: "Schedule", value: schedule)
+            if !nextRace.isEmpty {
+                infoRow(icon: "flag.fill", title: "Next Race", value: nextRace)
+            }
+            if !targetTime.isEmpty {
+                infoRow(icon: "scope", title: "Target", value: targetTime)
+            }
+        }
+        .tasukiCard()
+    }
+
+    private var aboutCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("About Me")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(Color.tasukiPrimary)
+            Text(bio)
+                .font(.system(size: 15))
+                .foregroundColor(Color.tasukiMutedText)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(14)
+                .background(RoundedRectangle(cornerRadius: 12).fill(Color.tasukiSurface))
+        }
+        .tasukiCard()
+    }
+
+    private var realityMiningCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Reality Mining")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(Color.tasukiPrimary)
+            Toggle(isOn: $realityMiningConsentEnabled) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("行動データ収集を許可")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(Color.tasukiPrimary)
+                    Text("推奨精度向上のために、画面利用やランニング関連イベントを収集します。")
+                        .font(.system(size: 12))
+                        .foregroundColor(Color.tasukiMutedText)
+                }
+            }
+            .tint(Color.tasukiAccent)
+            .padding(14)
+            .background(RoundedRectangle(cornerRadius: 12).fill(Color.tasukiSurface))
+        }
+        .tasukiCard()
+    }
+
+    private var integrationCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("デバイス連携")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(Color.tasukiPrimary)
+
+            Text("走行距離・ワークアウト取得元")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(Color.tasukiPrimary)
+
+            Picker("取得元", selection: Binding(
+                get: { selectedRunningDataSource },
+                set: { newValue in
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        runningDataSourceRaw = newValue.rawValue
+                    }
+                    RealityMiningManager.shared.trackEvent(
+                        name: "running_data_source_changed",
+                        properties: ["source": newValue.rawValue]
+                    )
+                })
+            ) {
+                ForEach(RunningDataSource.allCases) { source in
+                    Text(source.displayName).tag(source)
+                }
+            }
+            .pickerStyle(.menu)
+            .tint(Color.tasukiPrimary)
+
+            Text("Garmin Connect / Suunto App が Appleヘルスに同期した記録を読み取ります。")
+                .font(.system(size: 12))
+                .foregroundColor(Color.tasukiMutedText)
+
+            HStack(spacing: 10) {
+                integrationButton(title: "Garminを開く", source: .garmin)
+                integrationButton(title: "Suuntoを開く", source: .suunto)
+            }
+
+            if let integrationNotice {
+                Text(integrationNotice)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(Color.tasukiAccent)
+            }
+        }
+        .tasukiCard()
+    }
+
+    private var logoutButton: some View {
+        Button {
+            authManager.signOut { result in
+                if case let .failure(error) = result {
+                    print("Sign out failed: \(error.localizedDescription)")
+                }
+            }
+        } label: {
+            Text("ログアウト")
+                .font(.system(size: 16, weight: .bold))
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(Color.tasukiPrimary)
+                .cornerRadius(12)
+        }
+    }
+
+    private func statItem(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.system(size: 12))
+                .foregroundColor(Color.tasukiMutedText)
+            Text(value)
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(Color.tasukiPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Color.tasukiSurface))
+    }
+
+    private func tagView(text: String, isPrimary: Bool) -> some View {
+        Text(text)
+            .font(.system(size: 13, weight: .medium))
+            .foregroundColor(isPrimary ? .white : Color.tasukiPrimary)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(Capsule().fill(isPrimary ? Color.tasukiAccent : Color.tasukiSurface))
+    }
+
+    private func infoRow(icon: String, title: String, value: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundColor(Color.tasukiAccent)
+                .frame(width: 28, height: 28)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.system(size: 12))
+                    .foregroundColor(Color.tasukiMutedText)
+                Text(value)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(Color.tasukiPrimary)
+            }
+            Spacer()
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Color.tasukiSurface))
+    }
+
+    private func integrationButton(title: String, source: RunningDataSource) -> some View {
+        Button {
+            openCompanionApp(for: source)
+        } label: {
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(Color.tasukiPrimary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color.tasukiSurface)
+                )
+        }
+    }
+
     private func loadUserUUID() {
         guard let firebaseUser = Auth.auth().currentUser else { return }
         let db = Firestore.firestore()
-        db.collection("users").document(firebaseUser.uid).getDocument { snapshot, error in
+        db.collection("users").document(firebaseUser.uid).getDocument { snapshot, _ in
             if let data = snapshot?.data(), let idString = data["id"] as? String {
                 DispatchQueue.main.async {
                     self.userUUID = idString
@@ -340,71 +374,33 @@ struct MyProfileView: View {
             }
         }
     }
-    
-    // MARK: - Tag View
-    private func tagView(text: String, isPrimary: Bool) -> some View {
-        Text(text)
-            .font(.system(size: 14, weight: .medium))
-            .foregroundColor(isPrimary ? .white : Color(hex: "0F1A2E"))
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .background(
-                Capsule()
-                    .fill(isPrimary ? Color.royalBlue : Color(uiColor: .systemGray6))
-            )
-    }
-    
-    // MARK: - Info Card View
-    private func infoCardView(icon: String, title: String, value: String) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 20, weight: .medium))
-                .foregroundColor(Color.royalBlue)
-                .frame(width: 32, height: 32)
-                .background(
-                    Circle()
-                        .fill(Color.royalBlue.opacity(0.1))
-                )
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.system(size: 12, weight: .regular))
-                    .foregroundColor(Color(hex: "0F1A2E").opacity(0.6))
-                
-                Text(value)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(Color(hex: "0F1A2E"))
+
+    private func openCompanionApp(for source: RunningDataSource) {
+        let deepLink: URL?
+        let appStoreURL: URL?
+        switch source {
+        case .garmin:
+            deepLink = URL(string: "garminconnect://")
+            appStoreURL = URL(string: "https://apps.apple.com/jp/app/garmin-connect-mobile/id583446403")
+        case .suunto:
+            deepLink = URL(string: "suuntoapp://")
+            appStoreURL = URL(string: "https://apps.apple.com/jp/app/suunto/id1187259981")
+        default:
+            deepLink = nil
+            appStoreURL = nil
+        }
+
+        guard let deepLink, let appStoreURL else { return }
+        openURL(deepLink) { accepted in
+            withAnimation(.easeInOut(duration: 0.2)) {
+                if accepted {
+                    integrationNotice = "\(source.displayName) を開きました"
+                } else {
+                    openURL(appStoreURL)
+                    integrationNotice = "\(source.displayName) アプリが未インストールのためApp Storeを開きました"
+                }
             }
-            
-            Spacer()
         }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.white)
-                .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
-        )
-    }
-    
-    // MARK: - Stat Card View
-    private func statCardView(title: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.system(size: 12, weight: .regular, design: .default))
-                .foregroundColor(Color(hex: "0F1A2E").opacity(0.6))
-                .tracking(0.5)
-            
-            Text(value)
-                .font(.system(size: 18, weight: .semibold, design: .default))
-                .foregroundColor(Color(hex: "0F1A2E"))
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.white)
-                .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
-        )
     }
 }
 
