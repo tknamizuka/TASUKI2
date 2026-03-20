@@ -1,5 +1,6 @@
 import SwiftUI
 import MapKit
+import Combine
 
 struct RunRecordingView: View {
     @ObservedObject private var tracker = RunTracker.shared
