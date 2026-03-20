@@ -11,7 +11,7 @@ import Combine
 // MARK: - Race Entry（カテゴリ選択 → マッチング）
 struct RaceEntryView: View {
     @Environment(\.dismiss) var dismiss
-    @StateObject private var raceManager = RaceManager.shared
+    @ObservedObject private var raceManager = RaceManager.shared
     @AppStorage("myName") private var myName = "Runner"
     @AppStorage("myRank") private var myRank = "Rank B"
     
@@ -104,7 +104,7 @@ struct RaceLobbyView: View {
     let raceId: String
     var onDismissSheet: (() -> Void)?
     @Environment(\.dismiss) var dismiss
-    @StateObject private var raceManager = RaceManager.shared
+    @ObservedObject private var raceManager = RaceManager.shared
     @State private var countdown: Int?
     @State private var hasNavigatedToRunning = false
     
@@ -248,8 +248,8 @@ struct RaceRunningView: View {
     let raceId: String
     let startTime: Date
     var onDismissSheet: (() -> Void)?
-    @StateObject private var raceManager = RaceManager.shared
-    @StateObject private var runTracker = RunTracker.shared
+    @ObservedObject private var raceManager = RaceManager.shared
+    @ObservedObject private var runTracker = RunTracker.shared
     @State private var elapsedTimer: Timer?
     @State private var updateDistanceTimer: Timer?
     @State private var elapsedSeconds: Double = 0
@@ -396,7 +396,7 @@ struct RaceRunningView: View {
 struct RaceResultsView: View {
     let raceId: String
     var onDismissSheet: (() -> Void)?
-    @StateObject private var raceManager = RaceManager.shared
+    @ObservedObject private var raceManager = RaceManager.shared
     
     private var ranked: [RaceParticipant] {
         raceManager.participants

@@ -5,7 +5,7 @@ import FirebaseFirestore
 final class RealityMiningManager {
     static let shared = RealityMiningManager()
 
-    private let db = Firestore.firestore()
+    private lazy var db = Firestore.firestore()
     private let queue = DispatchQueue(label: "reality.mining.manager")
     private let consentKey = "realityMiningConsentEnabled"
 
@@ -32,6 +32,7 @@ final class RealityMiningManager {
 
     func trackEvent(name: String, properties: [String: Any] = [:], force: Bool = false) {
         queue.async {
+            FirebaseBootstrap.configureIfNeeded()
             guard force || self.isConsentEnabled else { return }
             guard let uid = Auth.auth().currentUser?.uid else { return }
 

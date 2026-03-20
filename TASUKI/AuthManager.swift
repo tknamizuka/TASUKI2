@@ -22,6 +22,7 @@ final class AuthManager: ObservableObject {
             authStateListener = nil
             return
         }
+        FirebaseBootstrap.configureIfNeeded()
         isUserLoggedIn = Auth.auth().currentUser != nil
         authStateListener = Auth.auth().addStateDidChangeListener { [weak self] _, user in
             DispatchQueue.main.async {

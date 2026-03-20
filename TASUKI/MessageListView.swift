@@ -73,7 +73,8 @@ struct MessageListView: View {
     @State private var conversations: [MessageConversation] = []
     @State private var requests: [MatchRequestSummary] = []
     @State private var isLoading = true
-    @StateObject private var conversationManager = ConversationManager.shared
+    /// シングルトンを `@StateObject` で保持すると未定義動作・起動時クラッシュの原因になるため `ObservedObject` を使う
+    @ObservedObject private var conversationManager = ConversationManager.shared
     
     var body: some View {
         NavigationStack {

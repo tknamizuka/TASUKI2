@@ -18,7 +18,10 @@ class UnreadCountProviderBase: ObservableObject {
 
 final class ConversationManager: UnreadCountProviderBase {
     static let shared = ConversationManager()
-    private let db = Firestore.firestore()
+    private lazy var db: Firestore = {
+        FirebaseBootstrap.configureIfNeeded()
+        return Firestore.firestore()
+    }()
     
     private override init() { super.init() }
     
@@ -120,6 +123,10 @@ final class ConversationManager: UnreadCountProviderBase {
                 completion?(error)
                 return
             }
+            guard let self = self else {
+                completion?(NSError(domain: "ConversationManager", code: -3, userInfo: [NSLocalizedDescriptionKey: "内部エラー"]))
+                return
+            }
             guard let data = snapshot?.data(),
                   var ids = data["participantIds"] as? [String] else {
                 completion?(NSError(domain: "ConversationManager", code: -2, userInfo: [NSLocalizedDescriptionKey: "会話が見つかりません"]))
@@ -132,12 +139,12 @@ final class ConversationManager: UnreadCountProviderBase {
             ids.append(userId)
             ref.updateData(["participantIds": ids]) { err in
                 if let err = err {
-                    self?.trackConversationEvent(
+                    self.trackConversationEvent(
                         "practice_chat_participant_add_failed",
                         properties: ["conversation_id": conversationId, "error_message": err.localizedDescription]
                     )
                 } else {
-                    self?.trackConversationEvent(
+                    self.trackConversationEvent(
                         "practice_chat_participant_added",
                         properties: ["conversation_id": conversationId]
                     )

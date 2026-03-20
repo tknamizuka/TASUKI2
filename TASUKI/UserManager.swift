@@ -7,7 +7,8 @@ final class UserManager: ObservableObject {
     
     @Published var hasProfile: Bool? = nil  // nil: 未判定, true/false: 判定済み
     
-    private let db = Firestore.firestore()
+    /// configure より前に `Firestore.firestore()` を触らないよう lazy にする（起動順問題の回避）
+    private lazy var db = Firestore.firestore()
     
     /// ログイン中ユーザーのプロフィールを Firestore に保存 / 更新
     func saveUserProfile(user: User, completion: @escaping (Result<Void, Error>) -> Void) {

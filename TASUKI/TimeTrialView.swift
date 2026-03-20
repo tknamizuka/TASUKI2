@@ -10,7 +10,7 @@ import SwiftUI
 // MARK: - エントリ（距離選択 → マッチング）
 struct TimeTrialEntryView: View {
     @Environment(\.dismiss) var dismiss
-    @StateObject private var manager = TimeTrialManager.shared
+    @ObservedObject private var manager = TimeTrialManager.shared
     @AppStorage("myName") private var myName = "Runner"
     @AppStorage("myRank") private var myRank = "Rank B"
     
@@ -99,7 +99,7 @@ struct TimeTrialRoomView: View {
     let roomId: String
     var onDismiss: (() -> Void)?
     @Environment(\.dismiss) var dismiss
-    @StateObject private var manager = TimeTrialManager.shared
+    @ObservedObject private var manager = TimeTrialManager.shared
     
     @State private var showSubmitSheet = false
     @State private var showResults = false
