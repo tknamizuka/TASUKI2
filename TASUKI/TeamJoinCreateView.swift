@@ -3,6 +3,7 @@ import FirebaseAuth
 import FirebaseFirestore
 
 struct TeamJoinCreateView: View {
+    private let maxTeamMembers = 7
     var onComplete: ((String?) -> Void)? = nil
     var useMockFlow: Bool = false
     
@@ -176,6 +177,7 @@ struct TeamJoinCreateView: View {
             "members": [],
             "inviteCode": inviteCode,
             "requiresApproval": requiresApproval,
+            "maxMembers": maxTeamMembers,
             "ownerUid": firebaseUser.uid
         ]
         
@@ -377,6 +379,14 @@ struct TeamJoinCreateView: View {
             }
             
             let requiresApproval = data["requiresApproval"] as? Bool ?? false
+            let members = data["members"] as? [String] ?? []
+            let maxMembers = data["maxMembers"] as? Int ?? maxTeamMembers
+
+            if !members.contains(firebaseUser.uid), members.count >= maxMembers {
+                self.errorMessage = "このチームは定員\(maxMembers)名に達しています。"
+                self.isProcessing = false
+                return
+            }
             
             if requiresApproval && !byInvite {
                 // 承認制かつ招待コードでない場合は申請を作成

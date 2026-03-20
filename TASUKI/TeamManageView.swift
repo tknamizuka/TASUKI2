@@ -3,6 +3,7 @@ import FirebaseFirestore
 import FirebaseAuth
 
 struct TeamManageView: View {
+    private let maxTeamMembers = 7
     let teamId: String
     @State private var requests: [JoinRequest] = []
     @State private var isLoading: Bool = false
@@ -113,6 +114,17 @@ struct TeamManageView: View {
                 }
 
                 // users/<uid>.teamId を設定
+                let teamDoc = try await db.collection("teams").document(teamId).getDocument()
+                let teamData = teamDoc.data() ?? [:]
+                let members = teamData["members"] as? [String] ?? []
+                let allowedMax = teamData["maxMembers"] as? Int ?? maxTeamMembers
+                if !members.contains(req.uid), members.count >= allowedMax {
+                    await MainActor.run {
+                        self.errorMessage = "定員\(allowedMax)名に達しているため承認できません。"
+                    }
+                    return
+                }
+
                 try await db.collection("users").document(req.uid).setData(["teamId": teamId], merge: true)
                 // teams/<teamId>.members に追加
                 try await db.collection("teams").document(teamId).updateData(["members": FieldValue.arrayUnion([req.uid])])

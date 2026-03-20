@@ -152,11 +152,12 @@ final class AuthManager: ObservableObject {
         Auth.auth().signIn(with: oauthProvider, uiDelegate: nil) { [weak self] _, error in
             DispatchQueue.main.async {
                 guard let self = self else { return }
-                self.isLoading = false
                 if let error = error as NSError? {
+                    self.isLoading = false
                     self.errorMessage = self.socialAuthErrorMessage(error, provider: provider)
                     completion(.failure(error))
                 } else {
+                    self.isLoading = false
                     self.errorMessage = ""
                     completion(.success(()))
                 }

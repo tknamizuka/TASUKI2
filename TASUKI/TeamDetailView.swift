@@ -3,6 +3,7 @@ import FirebaseAuth
 import FirebaseFirestore
 
 struct TeamDetailView: View {
+    private let maxTeamMembers = 7
     let teamId: String
     var onJoined: ((String?) -> Void)? = nil   // 呼び出し元へ参加結果を返す
 
@@ -77,6 +78,11 @@ struct TeamDetailView: View {
                     .font(.system(size: 18, weight: .bold))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 20)
+                Text("\(memberUIDs.count)/\(resolvedMaxMembers)名")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(Color.tasukiMutedText)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
 
                 if membersInfo.isEmpty {
                     Text("メンバー情報を取得中…")
@@ -93,7 +99,8 @@ struct TeamDetailView: View {
                 // 参加ボタン（自分がメンバーでもオーナーでもない場合のみ）
                 if let currentUid = effectiveCurrentUid,
                    !memberUIDs.contains(currentUid),
-                   ownerUid != currentUid {
+                   ownerUid != currentUid,
+                   memberUIDs.count < resolvedMaxMembers {
                     Button(action: { Task { await joinCurrentTeam() } }) {
                         HStack {
                             Spacer()
@@ -107,6 +114,12 @@ struct TeamDetailView: View {
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 16)
+                }
+                if memberUIDs.count >= resolvedMaxMembers {
+                    Text("このチームは定員\(resolvedMaxMembers)名に達しています。")
+                        .font(.system(size: 13))
+                        .foregroundColor(Color.tasukiMutedText)
+                        .padding(.top, 8)
                 }
             } else {
                 Text("チーム情報を読み込み中…")
@@ -136,6 +149,10 @@ struct TeamDetailView: View {
             ShareSheet(activityItems: [shareText])
         }
     }
+
+    private var resolvedMaxMembers: Int {
+        (teamData?["maxMembers"] as? Int) ?? maxTeamMembers
+    }
     
     /// サンプル用: 未ログインでも teamId に応じて「自分のUID相当」を決める
     private var effectiveCurrentUid: String? {
@@ -155,6 +172,10 @@ struct TeamDetailView: View {
         // サンプルチーム（example_member）の場合はローカルで擬似参加処理のみ行う
         if teamId == "example_member", let currentUid = effectiveCurrentUid {
             await MainActor.run {
+                if memberUIDs.count >= resolvedMaxMembers {
+                    alertMessage = "このチームは定員\(resolvedMaxMembers)名に達しています。"
+                    return
+                }
                 if !memberUIDs.contains(currentUid) {
                     memberUIDs.append(currentUid)
                     membersInfo.append("あなた")
@@ -178,6 +199,12 @@ struct TeamDetailView: View {
                 return
             }
             let requiresApproval = data["requiresApproval"] as? Bool ?? false
+            let members = data["members"] as? [String] ?? []
+            let maxMembers = data["maxMembers"] as? Int ?? maxTeamMembers
+            if !members.contains(currentUid), members.count >= maxMembers {
+                alertMessage = "このチームは定員\(maxMembers)名に達しています。"
+                return
+            }
             if requiresApproval {
                 // 申請を送る
                 let reqRef = teamRef.collection("joinRequests").document(currentUid)

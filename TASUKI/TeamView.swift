@@ -30,6 +30,7 @@ struct TeamChatMessage: Identifiable {
 
 // MARK: - Team View
 struct TeamView: View {
+    private let maxTeamMembers = 7
     var useMockTeamFlow: Bool = false
     @State private var userTeamId: String? = nil
     @State private var selectedTeamId: String = ""
@@ -86,7 +87,7 @@ struct TeamView: View {
         )
         allMembers.insert(myMember, at: 0)
         
-        return allMembers
+        return Array(allMembers.prefix(maxTeamMembers))
     }
     
     // チームチャット
@@ -303,10 +304,16 @@ struct TeamView: View {
     // MARK: - Slim Member List View
     private var slimMemberListView: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("メンバー")
-                .font(.system(size: 18, weight: .bold))
-                .foregroundColor(Color.tasukiPrimary)
-                .padding(.horizontal, 4)
+            HStack {
+                Text("メンバー")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(Color.tasukiPrimary)
+                Spacer()
+                Text("\(members.count)/\(maxTeamMembers)名")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(Color.tasukiMutedText)
+            }
+            .padding(.horizontal, 4)
             
             VStack(spacing: 8) {
                 ForEach(members) { member in
