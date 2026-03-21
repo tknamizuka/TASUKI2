@@ -3,9 +3,6 @@ import FirebaseAuth
 import FirebaseFirestore
 
 struct MyProfileView: View {
-    @EnvironmentObject var authManager: AuthManager
-    @Environment(\.openURL) private var openURL
-
     @AppStorage("myName") private var name: String = "Hiro"
     @AppStorage("myArea") private var area: String = "Tokyo, Setagaya"
     @AppStorage("myRank") private var rank: String = "Rank A"
@@ -18,31 +15,20 @@ struct MyProfileView: View {
     @AppStorage("myAvgPace") private var avgPace: String = "5:30/km"
     @AppStorage("myMonthlyDist") private var monthlyDist: String = "150km"
     @AppStorage("myTotalPoints") private var myTotalPoints: Int = 0
-    @AppStorage("realityMiningConsentEnabled") private var realityMiningConsentEnabled: Bool = false
-    @AppStorage("runningDataSource") private var runningDataSourceRaw: String = RunningDataSource.all.rawValue
     @AppStorage("myBio") private var bio: String = "平日は仕事終わりに5-10km走ってます！週末は距離走やりたいです。"
 
     @State private var userUUID: String = ""
     @State private var showCopiedToast: Bool = false
-    @State private var integrationNotice: String?
     @ObservedObject private var activityStore = RunActivityStore.shared
 
     private var myBadgeTier: PointBadgeTier? {
         PointBadgeHelper.tier(forTotalPoints: myTotalPoints)
     }
 
-    private var selectedRunningDataSource: RunningDataSource {
-        RunningDataSource(rawValue: runningDataSourceRaw) ?? .all
-    }
-
     private var runningSpotTags: [String] {
         runningSpots.components(separatedBy: ",")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-    }
-
-    private var companionSources: [RunningDataSource] {
-        RunningDataSource.allCases.filter { $0 != .all }
     }
 
     var body: some View {
@@ -57,9 +43,6 @@ struct MyProfileView: View {
                         statsCard
                         profileCard
                         aboutCard
-                        realityMiningCard
-                        integrationCard
-                        logoutButton
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 10)
@@ -77,9 +60,6 @@ struct MyProfileView: View {
                 }
             }
             .task { loadUserUUID() }
-            .onChange(of: realityMiningConsentEnabled) { newValue in
-                RealityMiningManager.shared.updateConsent(enabled: newValue)
-            }
             .overlay(alignment: .top) {
                 if showCopiedToast {
                     Text("UUIDをコピーしました")
@@ -240,94 +220,6 @@ struct MyProfileView: View {
         .tasukiCard()
     }
 
-    private var realityMiningCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Reality Mining")
-                .font(.system(size: 18, weight: .bold))
-                .foregroundColor(Color.tasukiPrimary)
-            Toggle(isOn: $realityMiningConsentEnabled) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("行動データ収集を許可")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(Color.tasukiPrimary)
-                    Text("推奨精度向上のために、画面利用やランニング関連イベントを収集します。")
-                        .font(.system(size: 12))
-                        .foregroundColor(Color.tasukiMutedText)
-                }
-            }
-            .tint(Color.tasukiAccent)
-            .padding(14)
-            .background(RoundedRectangle(cornerRadius: 12).fill(Color.tasukiSurface))
-        }
-        .tasukiCard()
-    }
-
-    private var integrationCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("デバイス連携")
-                .font(.system(size: 18, weight: .bold))
-                .foregroundColor(Color.tasukiPrimary)
-
-            Text("走行距離・ワークアウト取得元")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(Color.tasukiPrimary)
-
-            Picker("取得元", selection: Binding(
-                get: { selectedRunningDataSource },
-                set: { newValue in
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        runningDataSourceRaw = newValue.rawValue
-                    }
-                    RealityMiningManager.shared.trackEvent(
-                        name: "running_data_source_changed",
-                        properties: ["source": newValue.rawValue]
-                    )
-                })
-            ) {
-                ForEach(RunningDataSource.allCases) { source in
-                    Text(source.displayName).tag(source)
-                }
-            }
-            .pickerStyle(.menu)
-            .tint(Color.tasukiPrimary)
-
-            Text("選択したサービスの記録がAppleヘルスへ同期されている場合、TASUKIで読み取りできます。")
-                .font(.system(size: 12))
-                .foregroundColor(Color.tasukiMutedText)
-
-            let columns = [GridItem(.adaptive(minimum: 120), spacing: 10)]
-            LazyVGrid(columns: columns, spacing: 10) {
-                ForEach(companionSources) { source in
-                    integrationButton(title: source.displayName, source: source)
-                }
-            }
-
-            if let integrationNotice {
-                Text(integrationNotice)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(Color.tasukiAccent)
-            }
-        }
-        .tasukiCard()
-    }
-
-    private var logoutButton: some View {
-        Button {
-            authManager.signOut { result in
-                if case let .failure(error) = result {
-                    print("Sign out failed: \(error.localizedDescription)")
-                }
-            }
-        } label: {
-            Text("ログアウト")
-                .font(.system(size: 16, weight: .bold))
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .background(Color.tasukiPrimary)
-                .cornerRadius(12)
-        }
-    }
 
     private func statItem(title: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -439,25 +331,6 @@ struct MyProfileView: View {
         .background(RoundedRectangle(cornerRadius: 10).fill(Color.tasukiSurface))
     }
 
-    private func integrationButton(title: String, source: RunningDataSource) -> some View {
-        Button {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                runningDataSourceRaw = source.rawValue
-            }
-            openCompanionApp(for: source)
-        } label: {
-            Text(title)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(selectedRunningDataSource == source ? .white : Color.tasukiPrimary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(selectedRunningDataSource == source ? Color.tasukiAccent : Color.tasukiSurface)
-                )
-        }
-    }
-
     private func loadUserUUID() {
         guard let firebaseUser = Auth.auth().currentUser else { return }
         let db = Firestore.firestore()
@@ -470,48 +343,6 @@ struct MyProfileView: View {
         }
     }
 
-    private func openCompanionApp(for source: RunningDataSource) {
-        if source == .appleHealth {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                integrationNotice = "Apple Health を取得元に設定しました"
-            }
-            return
-        }
-
-        let links = source.deepLinks
-        guard !links.isEmpty else {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                integrationNotice = "\(source.displayName) の起動リンクが未設定です"
-            }
-            return
-        }
-
-        func tryOpen(_ index: Int) {
-            if index >= links.count {
-                if let appStore = source.appStoreURL {
-                    openURL(appStore)
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        integrationNotice = "\(source.displayName) アプリが未インストールのためApp Storeを開きました"
-                    }
-                } else {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        integrationNotice = "\(source.displayName) を開けませんでした"
-                    }
-                }
-                return
-            }
-            openURL(links[index]) { accepted in
-                if accepted {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        integrationNotice = "\(source.displayName) を開きました"
-                    }
-                } else {
-                    tryOpen(index + 1)
-                }
-            }
-        }
-        tryOpen(0)
-    }
 }
 
 private struct WeeklyActivityPoint: Identifiable {

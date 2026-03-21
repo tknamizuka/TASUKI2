@@ -126,7 +126,13 @@ struct TimeTrialRoomView: View {
     @State private var recorderTargetSplitSeconds: Double?
     @State private var recorderPreviousDistanceKm: Double = 0
     @State private var recorderPreviousElapsedSeconds: Double = 0
+    @State private var recorderPendingSubmission = false
+    @State private var recorderPendingCanSubmit = false
+    @State private var recorderPendingSplitSeconds: Double = 0
+    @State private var recorderPendingDistanceKm: Double = 0
+    @State private var recorderPendingElapsedSeconds: Double = 0
     @AppStorage("runningDataSource") private var runningDataSourceRaw: String = RunningDataSource.all.rawValue
+    @AppStorage("connectedRunningDevices") private var connectedRunningDevicesRaw: String = ""
     private let recorderTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     
     private var myParticipant: TimeTrialParticipant? {
@@ -139,6 +145,30 @@ struct TimeTrialRoomView: View {
 
     private var selectedRunningDataSource: RunningDataSource {
         RunningDataSource(rawValue: runningDataSourceRaw) ?? .all
+    }
+
+    private var connectedRunningSources: [RunningDataSource] {
+        connectedRunningDevicesRaw
+            .split(separator: ",")
+            .compactMap { RunningDataSource(rawValue: String($0)) }
+            .filter { $0 != .all }
+    }
+
+    private var preferredConnectedSource: RunningDataSource? {
+        if selectedRunningDataSource != .all, connectedRunningSources.contains(selectedRunningDataSource) {
+            return selectedRunningDataSource
+        }
+        return connectedRunningSources.first
+    }
+
+    private var healthKitSourceButtonTitle: String {
+        if let source = preferredConnectedSource {
+            return "\(source.displayName) の記録から選ぶ"
+        }
+        if selectedRunningDataSource != .all {
+            return "\(selectedRunningDataSource.displayName) の記録から選ぶ"
+        }
+        return "接続デバイスの記録から選ぶ"
     }
 
     private var recorderElapsedSeconds: TimeInterval {
@@ -354,7 +384,7 @@ struct TimeTrialRoomView: View {
             }) {
                 HStack {
                     Image(systemName: "heart.fill")
-                    Text("\(selectedRunningDataSource.displayName) の記録から選ぶ")
+                    Text(healthKitSourceButtonTitle)
                 }
                 .font(.headline)
                 .foregroundColor(.white)
@@ -526,34 +556,111 @@ struct TimeTrialRoomView: View {
     private func recorderView(room: TimeTrialRoom?) -> some View {
         ZStack {
             Color.tasukiDarkBackground.ignoresSafeArea()
-            if tracker.isTracking {
+            if recorderPendingSubmission {
+                VStack(spacing: 14) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("記録を確認")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundColor(Color.tasukiMutedText)
+                            .tracking(1.5)
+                        Text("提出前に内容を確認してください")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(Color.tasukiPrimary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .tasukiCard()
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        recorderConfirmRow("距離", "\(String(format: "%.2f", recorderPendingDistanceKm)) km")
+                        recorderConfirmRow("全体タイム", formatDuration(recorderPendingElapsedSeconds))
+                        if recorderPendingCanSubmit {
+                            recorderConfirmRow("提出タイム", formatDuration(recorderPendingSplitSeconds))
+                        } else if let room = room {
+                            Text("目標距離 \(room.distanceKm.clean)km に未達のため提出できません。中止して戻ることができます。")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(Color.tasukiMutedText)
+                        }
+                    }
+                    .tasukiCard()
+
+                    HStack(spacing: 12) {
+                        if recorderPendingCanSubmit {
+                            Button {
+                                submitPreparedRecorderTime()
+                            } label: {
+                                Text("タイムを提出")
+                                    .font(.system(size: 16, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 14)
+                                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.tasukiPrimary))
+                            }
+                            .buttonStyle(.plain)
+                        } else {
+                            Button {
+                                resumeRecorderFromPending()
+                            } label: {
+                                Text("計測を再開する")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 14)
+                                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.tasukiAccentOrange))
+                            }
+                            .buttonStyle(.plain)
+                        }
+
+                        Button {
+                            cancelPreparedRecorderTime()
+                        } label: {
+                            Text(recorderPendingCanSubmit ? "戻る" : "中止して戻る")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(Color.tasukiPrimary)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.tasukiDarkCardSecondary, lineWidth: 1)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .tasukiCard()
+
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            } else if tracker.isTracking {
                 VStack(spacing: 0) {
                     VStack(spacing: 2) {
                         Text("自動停止")
-                            .font(.system(size: 20, weight: .bold))
+                            .font(.system(size: 22, weight: .bold))
                             .foregroundColor(Color.tasukiPrimary)
                         Text(formatDuration(recorderElapsedSeconds))
-                            .font(.system(size: 54, weight: .heavy, design: .rounded))
+                            .font(.system(size: 56, weight: .heavy, design: .rounded))
                             .foregroundColor(Color.tasukiPrimary)
                             .monospacedDigit()
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.top, 16)
-                    .padding(.bottom, 14)
+                    .padding(.top, 20)
+                    .padding(.bottom, 16)
                     .background(Color.tasukiSurface)
 
-                    Spacer(minLength: 16)
+                    Spacer(minLength: 18)
 
                     Text(String(format: "%.1f", recorderAverageSpeedKmh))
-                        .font(.system(size: 110, weight: .heavy, design: .rounded))
+                        .font(.system(size: 120, weight: .heavy, design: .rounded))
                         .foregroundColor(Color.tasukiPrimary)
                         .monospacedDigit()
+                        .lineLimit(1)
                         .minimumScaleFactor(0.6)
                     Text("平均速度 (km/時)")
-                        .font(.system(size: 28, weight: .semibold))
+                        .font(.system(size: 32, weight: .semibold))
                         .foregroundColor(Color.tasukiMutedText)
 
-                    Spacer(minLength: 18)
+                    Spacer(minLength: 24)
 
                     HStack(spacing: 16) {
                         recorderValueCard(value: String(format: "%.2f", tracker.distanceKm), title: "距離 (km)")
@@ -576,7 +683,7 @@ struct TimeTrialRoomView: View {
                                 Image(systemName: tracker.isPaused ? "play.fill" : "pause.fill")
                                 Text(tracker.isPaused ? "再開" : "一時停止")
                             }
-                            .font(.system(size: 23, weight: .bold))
+                            .font(.system(size: 24, weight: .bold))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 18)
@@ -585,13 +692,13 @@ struct TimeTrialRoomView: View {
                         .buttonStyle(.plain)
 
                         Button {
-                            finishRecorderAndSubmit(room: room)
+                            finishRecorderAndPrepareSubmission(room: room)
                         } label: {
                             HStack(spacing: 8) {
                                 Image(systemName: "flag.checkered")
-                                Text("終了して提出")
+                                Text("終了")
                             }
-                            .font(.system(size: 23, weight: .bold))
+                            .font(.system(size: 24, weight: .bold))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 18)
@@ -600,7 +707,7 @@ struct TimeTrialRoomView: View {
                         .buttonStyle(.plain)
                     }
                     .padding(.horizontal, 16)
-                    .padding(.bottom, 24)
+                    .padding(.bottom, 20)
                 }
             } else {
                 VStack(spacing: 14) {
@@ -638,6 +745,7 @@ struct TimeTrialRoomView: View {
                         recorderTargetSplitSeconds = nil
                         recorderPreviousDistanceKm = 0
                         recorderPreviousElapsedSeconds = 0
+                        recorderPendingSubmission = false
                     } label: {
                         Text("ランニングを記録する")
                             .font(.system(size: 16, weight: .bold))
@@ -657,15 +765,13 @@ struct TimeTrialRoomView: View {
         }
     }
 
-    private func finishRecorderAndSubmit(room: TimeTrialRoom?) {
-        tracker.stop()
+    private func finishRecorderAndPrepareSubmission(room: TimeTrialRoom?) {
         guard let room else { return }
-        let targetKm = room.distanceKm
-        if tracker.distanceKm < targetKm {
-            submitError = "目標距離\(targetKm.clean)km以上を走ると提出できます（現在 \(String(format: "%.2f", tracker.distanceKm))km）"
-            return
-        }
         let elapsed = max(recorderElapsedSeconds, 1)
+        if !tracker.isPaused {
+            tracker.pause()
+        }
+        let targetKm = room.distanceKm
         let splitAtTarget: Double = {
             if let split = recorderTargetSplitSeconds {
                 return split
@@ -673,17 +779,45 @@ struct TimeTrialRoomView: View {
             let ratio = targetKm / max(tracker.distanceKm, 0.001)
             return max(1, elapsed * ratio)
         }()
+        recorderPendingDistanceKm = tracker.distanceKm
+        recorderPendingElapsedSeconds = elapsed
+        recorderPendingSplitSeconds = splitAtTarget
+        recorderPendingCanSubmit = tracker.distanceKm >= targetKm
+        recorderPendingSubmission = true
+    }
+
+    private func submitPreparedRecorderTime() {
+        guard recorderPendingSubmission, recorderPendingCanSubmit else { return }
         _ = activityStore.addActivity(
-            distanceKm: tracker.distanceKm,
-            durationSeconds: elapsed,
+            distanceKm: recorderPendingDistanceKm,
+            durationSeconds: recorderPendingElapsedSeconds,
             routeCoordinates: tracker.routeCoordinates,
             source: "time_trial_recorder"
         )
+        tracker.stop()
         tracker.reset()
-        submitTimeWithSeconds(splitAtTarget)
+        submitTimeWithSeconds(recorderPendingSplitSeconds)
         recorderTargetSplitSeconds = nil
+        recorderPendingCanSubmit = false
+        recorderPendingSubmission = false
         showRecorder = false
         showSubmitSheet = false
+    }
+
+    private func cancelPreparedRecorderTime() {
+        tracker.stop()
+        tracker.reset()
+        recorderTargetSplitSeconds = nil
+        recorderPendingCanSubmit = false
+        recorderPendingSubmission = false
+        showRecorder = false
+    }
+
+    private func resumeRecorderFromPending() {
+        guard recorderPendingSubmission, !recorderPendingCanSubmit else { return }
+        recorderPendingSubmission = false
+        tracker.resume()
+        recorderNow = Date()
     }
 
     private func updateTargetSplitIfNeeded(room: TimeTrialRoom?, newDistanceKm: Double) {
@@ -711,16 +845,28 @@ struct TimeTrialRoomView: View {
     private func recorderValueCard(value: String, title: String) -> some View {
         VStack(spacing: 2) {
             Text(value)
-                .font(.system(size: 58, weight: .heavy, design: .rounded))
+                .font(.system(size: 64, weight: .heavy, design: .rounded))
                 .foregroundColor(Color.tasukiPrimary)
                 .monospacedDigit()
                 .lineLimit(1)
-                .minimumScaleFactor(0.55)
+                .minimumScaleFactor(0.5)
             Text(title)
-                .font(.system(size: 22, weight: .semibold))
+                .font(.system(size: 24, weight: .semibold))
                 .foregroundColor(Color.tasukiMutedText)
         }
         .frame(maxWidth: .infinity)
+    }
+
+    private func recorderConfirmRow(_ title: String, _ value: String) -> some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(Color.tasukiMutedText)
+            Spacer()
+            Text(value)
+                .font(.system(size: 16, weight: .bold))
+                .foregroundColor(Color.tasukiPrimary)
+        }
     }
 
     private func formatDuration(_ sec: TimeInterval) -> String {

@@ -27,11 +27,19 @@ final class RunTracker: NSObject, ObservableObject {
     private var lastDistanceBucket: Int = 0
     private var pausedAt: Date?
     private var accumulatedPausedSeconds: TimeInterval = 0
+    // Accuracy tuning values calibrated for phone-based running.
+    private let maxHorizontalAccuracy: CLLocationAccuracy = 25
+    private let maxStaleSeconds: TimeInterval = 5
+    private let minSegmentDistanceMeters: CLLocationDistance = 2
+    private let maxRunningSpeedMps: CLLocationSpeed = 8.5
+    private let warmupDurationSeconds: TimeInterval = 40
+    private let warmupMaxRunningSpeedMps: CLLocationSpeed = 7.0
     
     override private init() {
         super.init()
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyBest
+        locationManager.activityType = .fitness
         locationManager.distanceFilter = 10
         locationManager.allowsBackgroundLocationUpdates = false
     }
@@ -124,6 +132,9 @@ final class RunTracker: NSObject, ObservableObject {
 extension RunTracker: CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let newLocation = locations.last, newLocation.horizontalAccuracy >= 0 else { return }
+        guard isTracking, !isPaused else { return }
+        guard shouldUseLocation(newLocation) else { return }
+
         DispatchQueue.main.async {
             self.currentAltitudeMeters = max(0, newLocation.altitude)
             if let lastCoord = self.routeCoordinates.last {
@@ -136,8 +147,13 @@ extension RunTracker: CLLocationManagerDelegate {
             }
         }
         if let last = lastLocation {
+            let dt = newLocation.timestamp.timeIntervalSince(last.timestamp)
+            guard dt > 0 else {
+                lastLocation = newLocation
+                return
+            }
             let meters = last.distance(from: newLocation)
-            if meters > 0 && meters < 500 {
+            if meters >= minSegmentDistanceMeters && isPlausibleRunSegment(distanceMeters: meters, dt: dt, locationSpeed: newLocation.speed) {
                 DispatchQueue.main.async {
                     self.distanceKm += meters / 1000.0
                     let currentBucket = Int(self.distanceKm)
@@ -159,6 +175,27 @@ extension RunTracker: CLLocationManagerDelegate {
             self.lastAltitude = newLocation.altitude
         }
         lastLocation = newLocation
+    }
+
+    private func shouldUseLocation(_ location: CLLocation) -> Bool {
+        if location.horizontalAccuracy < 0 || location.horizontalAccuracy > maxHorizontalAccuracy {
+            return false
+        }
+        let ageSeconds = abs(location.timestamp.timeIntervalSinceNow)
+        if ageSeconds > maxStaleSeconds {
+            return false
+        }
+        return true
+    }
+
+    private func isPlausibleRunSegment(distanceMeters: CLLocationDistance, dt: TimeInterval, locationSpeed: CLLocationSpeed) -> Bool {
+        guard dt > 0 else { return false }
+        let derivedSpeed = distanceMeters / dt
+        let measuredSpeed = locationSpeed >= 0 ? locationSpeed : derivedSpeed
+        let segmentSpeed = max(derivedSpeed, measuredSpeed)
+        let elapsedSinceStart = trackingStartedAt.map { Date().timeIntervalSince($0) } ?? 0
+        let speedLimit = elapsedSinceStart <= warmupDurationSeconds ? warmupMaxRunningSpeedMps : maxRunningSpeedMps
+        return segmentSpeed <= speedLimit
     }
     
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {

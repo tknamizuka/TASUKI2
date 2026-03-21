@@ -1260,142 +1260,90 @@ private struct AgeRangeSlider: View {
     @Binding var ageMax: Int
     let range: ClosedRange<Int>
     
-    @State private var dragStartMin: Int?
-    @State private var dragStartMax: Int?
-    
     private let trackHeight: CGFloat = 8
     private let thumbSize: CGFloat = 28
-    private let thumbTouchPadding: CGFloat = 12
+    private let thumbHitSize: CGFloat = 44
     
     private var rangeSpan: Int { range.upperBound - range.lowerBound }
     
     var body: some View {
         GeometryReader { geo in
-            let w = geo.size.width
+            let w = max(1, geo.size.width)
             let minFraction = CGFloat(ageMin - range.lowerBound) / CGFloat(rangeSpan)
             let maxFraction = CGFloat(ageMax - range.lowerBound) / CGFloat(rangeSpan)
             let minX = minFraction * w
             let maxX = maxFraction * w
             
-            ZStack(alignment: .leading) {
-                // 背景バー（タッチは透過）
+            ZStack {
                 RoundedRectangle(cornerRadius: trackHeight / 2)
                     .fill(Color.gray.opacity(0.2))
                     .frame(height: trackHeight)
-                    .allowsHitTesting(false)
-                
-                // 選択範囲（青い部分・タッチは透過）
+
                 RoundedRectangle(cornerRadius: trackHeight / 2)
                     .fill(Color(hex: "2E5CFF"))
                     .frame(width: max(0, maxX - minX), height: trackHeight)
-                    .offset(x: minX)
-                    .allowsHitTesting(false)
-                
-                // 左つまみ（下限）
-                thumbCircle(x: minX)
+                    .position(x: (minX + maxX) / 2, y: thumbHitSize / 2)
+
+                thumbCircle
+                    .position(x: minX, y: thumbHitSize / 2)
                     .highPriorityGesture(
                         DragGesture(minimumDistance: 0)
                             .onChanged { value in
-                                // #region agent log
-                                debugLog(
-                                    hypothesisId: "H1",
-                                    location: "FindView.swift:AgeRangeSlider.min.onChanged",
-                                    message: "AgeRangeSlider min drag changed",
-                                    data: [
-                                        "ageMin": ageMin,
-                                        "ageMax": ageMax
-                                    ]
-                                )
-                                // #endregion
-                                
-                                let start = dragStartMin ?? ageMin
-                                if dragStartMin == nil { dragStartMin = ageMin }
-                                let delta = Int(round(value.translation.width / w * CGFloat(rangeSpan)))
-                                let newMin = start + delta
-                                ageMin = min(max(newMin, range.lowerBound), ageMax)
+                                let clampedX = clampX(value.location.x, width: w)
+                                let proposed = xToAge(clampedX, width: w)
+                                ageMin = min(max(proposed, range.lowerBound), ageMax)
                             }
-                            .onEnded { _ in dragStartMin = nil }
                     )
-                
-                // 右つまみ（上限）
-                thumbCircle(x: maxX)
+
+                thumbCircle
+                    .position(x: maxX, y: thumbHitSize / 2)
                     .highPriorityGesture(
                         DragGesture(minimumDistance: 0)
                             .onChanged { value in
-                                // #region agent log
-                                debugLog(
-                                    hypothesisId: "H1",
-                                    location: "FindView.swift:AgeRangeSlider.max.onChanged",
-                                    message: "AgeRangeSlider max drag changed",
-                                    data: [
-                                        "ageMin": ageMin,
-                                        "ageMax": ageMax
-                                    ]
-                                )
-                                // #endregion
-                                
-                                let start = dragStartMax ?? ageMax
-                                if dragStartMax == nil { dragStartMax = ageMax }
-                                let delta = Int(round(value.translation.width / w * CGFloat(rangeSpan)))
-                                let newMax = start + delta
-                                ageMax = max(min(newMax, range.upperBound), ageMin)
+                                let clampedX = clampX(value.location.x, width: w)
+                                let proposed = xToAge(clampedX, width: w)
+                                ageMax = max(min(proposed, range.upperBound), ageMin)
                             }
-                            .onEnded { _ in dragStartMax = nil }
                     )
             }
-            .frame(height: thumbSize + thumbTouchPadding * 2)
+            .contentShape(Rectangle())
+            .highPriorityGesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        let clampedX = clampX(value.location.x, width: w)
+                        let target = xToAge(clampedX, width: w)
+                        let distToMin = abs(target - ageMin)
+                        let distToMax = abs(target - ageMax)
+                        if distToMin <= distToMax {
+                            ageMin = min(max(target, range.lowerBound), ageMax)
+                        } else {
+                            ageMax = max(min(target, range.upperBound), ageMin)
+                        }
+                    }
+            )
+            .frame(height: thumbHitSize)
         }
         .frame(height: 44)
     }
 
-    /// デバッグログを NDJSON 形式でファイルに追記する
-    private func debugLog(
-        hypothesisId: String,
-        location: String,
-        message: String,
-        data: [String: Any]
-    ) {
-        let log: [String: Any] = [
-            "sessionId": "62b7cb",
-            "runId": "pre-fix",
-            "hypothesisId": hypothesisId,
-            "location": location,
-            "message": message,
-            "data": data,
-            "timestamp": Int(Date().timeIntervalSince1970 * 1000)
-        ]
-
-        guard let jsonData = try? JSONSerialization.data(withJSONObject: log),
-              let jsonString = String(data: jsonData, encoding: .utf8) else {
-            return
-        }
-
-        let line = jsonString + "\n"
-        let url = URL(fileURLWithPath: "/Users/takuyanamizuka/Desktop/TASUKI/TASUKI/.cursor/debug-62b7cb.log")
-
-        if FileManager.default.fileExists(atPath: url.path) {
-            if let handle = try? FileHandle(forWritingTo: url) {
-                handle.seekToEndOfFile()
-                if let data = line.data(using: .utf8) {
-                    handle.write(data)
-                }
-                try? handle.close()
-            }
-        } else {
-            try? line.write(to: url, atomically: true, encoding: .utf8)
-        }
-    }
-    
-    private func thumbCircle(x: CGFloat) -> some View {
+    private var thumbCircle: some View {
         Circle()
             .fill(Color.white)
             .frame(width: thumbSize, height: thumbSize)
             .shadow(color: .black.opacity(0.2), radius: 2, x: 0, y: 1)
             .overlay(Circle().stroke(Color(hex: "2E5CFF"), lineWidth: 2))
-            .offset(x: x - thumbSize / 2)
-            .padding(.vertical, thumbTouchPadding)
+            .frame(width: thumbHitSize, height: thumbHitSize)
             .contentShape(Rectangle())
             .zIndex(1)
+    }
+
+    private func clampX(_ x: CGFloat, width: CGFloat) -> CGFloat {
+        min(max(0, x), width)
+    }
+
+    private func xToAge(_ x: CGFloat, width: CGFloat) -> Int {
+        let ratio = width <= 0 ? 0 : x / width
+        return range.lowerBound + Int(round(ratio * CGFloat(rangeSpan)))
     }
 }
 
@@ -1432,6 +1380,14 @@ struct FilterDetailSheet: View {
     @Environment(\.dismiss) var dismiss
     @State private var localRunSpot: String = ""
     @State private var practiceDateSelection: Date = Date()  // 日時ピッカー用（日付・時刻の両方）
+    @State private var isRankPickerExpanded: Bool = false
+    @State private var isPrefectureExpanded: Bool = false
+    @State private var isAgeGroupExpanded: Bool = false
+    @State private var isActiveTimeExpanded: Bool = false
+    @State private var isRunningGoalExpanded: Bool = false
+    @State private var isBestFullExpanded: Bool = false
+    @State private var isBestHalfExpanded: Bool = false
+    @State private var isEasyPaceExpanded: Bool = false
     
     // 47都道府県（JISコード順）
     private let prefectures = [
@@ -1478,27 +1434,51 @@ struct FilterDetailSheet: View {
                 
                 if selectedMode == "Runners" {
                     Section(header: Text("ランク")) {
-                        Text("マッチングするランク（複数選択可）")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        ForEach(selectableRanks, id: \.self) { rank in
-                            Button {
-                                if selectedRunnerRanks.contains(rank) {
-                                    selectedRunnerRanks.remove(rank)
-                                } else {
-                                    selectedRunnerRanks.insert(rank)
-                                }
-                            } label: {
-                                HStack {
-                                    Text(rank)
-                                        .foregroundColor(Color(hex: "0F1A2E"))
-                                    Spacer()
-                                    Image(systemName: selectedRunnerRanks.contains(rank) ? "checkmark.circle.fill" : "circle")
-                                        .foregroundColor(selectedRunnerRanks.contains(rank) ? Color(hex: "2E5CFF") : .gray)
-                                }
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.16)) {
+                                isRankPickerExpanded.toggle()
                             }
-                            .buttonStyle(.plain)
+                        } label: {
+                            HStack {
+                                Text("マッチングするランク（複数選択）")
+                                    .foregroundColor(Color(hex: "0F1A2E"))
+                                Spacer()
+                                Text(
+                                    selectedRunnerRanks.isEmpty
+                                    ? "指定なし"
+                                    : selectedRunnerRanks.sorted().joined(separator: ", ")
+                                )
+                                .font(.caption)
+                                .foregroundColor(Color(hex: "0F1A2E").opacity(0.65))
+                                .lineLimit(1)
+                                Image(systemName: isRankPickerExpanded ? "chevron.up" : "chevron.down")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
                         }
+                        .buttonStyle(.plain)
+
+                        if isRankPickerExpanded {
+                            ForEach(selectableRanks, id: \.self) { rank in
+                                Button {
+                                    if selectedRunnerRanks.contains(rank) {
+                                        selectedRunnerRanks.remove(rank)
+                                    } else {
+                                        selectedRunnerRanks.insert(rank)
+                                    }
+                                } label: {
+                                    HStack {
+                                        Text(rank)
+                                            .foregroundColor(Color(hex: "0F1A2E"))
+                                        Spacer()
+                                        Image(systemName: selectedRunnerRanks.contains(rank) ? "checkmark.circle.fill" : "circle")
+                                            .foregroundColor(selectedRunnerRanks.contains(rank) ? Color(hex: "2E5CFF") : .gray)
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+
                         Text("未選択の場合は全ランクが対象です")
                             .font(.caption2)
                             .foregroundColor(.secondary)
@@ -1509,10 +1489,22 @@ struct FilterDetailSheet: View {
                     
                     // 基本情報
                     Section(header: Text("基本情報")) {
-                        Picker("居住地", selection: $prefecture) {
-                            ForEach(prefectures, id: \.self) { pref in
-                                Text(pref).tag(pref)
-                            }
+                        expandableSingleSelect(
+                            title: "居住地",
+                            selectionText: prefecture,
+                            isExpanded: $isPrefectureExpanded,
+                            options: prefectures
+                        ) { selected in
+                            prefecture = selected
+                        }
+                        
+                        expandableSingleSelect(
+                            title: "年代",
+                            selectionText: ageGroup,
+                            isExpanded: $isAgeGroupExpanded,
+                            options: ageGroups
+                        ) { selected in
+                            ageGroup = selected
                         }
                         
                         VStack(alignment: .leading, spacing: 12) {
@@ -1532,25 +1524,34 @@ struct FilterDetailSheet: View {
                             AgeRangeSlider(ageMin: $ageMin, ageMax: $ageMax, range: 20...80)
                         }
                         
-                        Picker("普段走る時間帯", selection: $activeTime) {
-                            ForEach(schedules, id: \.self) { schedule in
-                                Text(schedule).tag(schedule)
-                            }
+                        expandableSingleSelect(
+                            title: "普段走る時間帯",
+                            selectionText: activeTime,
+                            isExpanded: $isActiveTimeExpanded,
+                            options: schedules
+                        ) { selected in
+                            activeTime = selected
                         }
                     }
                     
                     // ランニング情報
                     Section(header: Text("ランニング情報")) {
-                        Picker("目的", selection: $runningGoal) {
-                            ForEach(runningGoals, id: \.self) { goal in
-                                Text(goal).tag(goal)
-                            }
+                        expandableSingleSelect(
+                            title: "目的",
+                            selectionText: runningGoal,
+                            isExpanded: $isRunningGoalExpanded,
+                            options: runningGoals
+                        ) { selected in
+                            runningGoal = selected
                         }
                         
-                        Picker("ベスト（フル）", selection: $bestFull) {
-                            ForEach(bestFullOptions, id: \.self) { best in
-                                Text(best).tag(best)
-                            }
+                        expandableSingleSelect(
+                            title: "ベスト（フル）",
+                            selectionText: bestFull,
+                            isExpanded: $isBestFullExpanded,
+                            options: bestFullOptions
+                        ) { selected in
+                            bestFull = selected
                         }
                         if !myBestFull.isEmpty {
                             Text("登録時の値: \(myBestFull)")
@@ -1558,10 +1559,13 @@ struct FilterDetailSheet: View {
                                 .foregroundColor(Color(hex: "0F1A2E").opacity(0.6))
                         }
                         
-                        Picker("ベスト（ハーフ）", selection: $bestHalf) {
-                            ForEach(bestHalfOptions, id: \.self) { best in
-                                Text(best).tag(best)
-                            }
+                        expandableSingleSelect(
+                            title: "ベスト（ハーフ）",
+                            selectionText: bestHalf,
+                            isExpanded: $isBestHalfExpanded,
+                            options: bestHalfOptions
+                        ) { selected in
+                            bestHalf = selected
                         }
                         if !myBestHalf.isEmpty {
                             Text("登録時の値: \(myBestHalf)")
@@ -1569,10 +1573,13 @@ struct FilterDetailSheet: View {
                                 .foregroundColor(Color(hex: "0F1A2E").opacity(0.6))
                         }
                         
-                        Picker("普段のジョグペース", selection: $easyPace) {
-                            ForEach(easyPaces, id: \.self) { pace in
-                                Text(pace).tag(pace)
-                            }
+                        expandableSingleSelect(
+                            title: "普段のジョグペース",
+                            selectionText: easyPace,
+                            isExpanded: $isEasyPaceExpanded,
+                            options: easyPaces
+                        ) { selected in
+                            easyPace = selected
                         }
                         Text("登録時の値: \(myJogPace)")
                             .font(.caption)
@@ -1724,6 +1731,53 @@ struct FilterDetailSheet: View {
             .onAppear {
                 localRunSpot = runSpot
                 practiceDateSelection = practiceFilterDate ?? Date()
+            }
+        }
+    }
+
+    private func expandableSingleSelect(
+        title: String,
+        selectionText: String,
+        isExpanded: Binding<Bool>,
+        options: [String],
+        onSelect: @escaping (String) -> Void
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.16)) {
+                    isExpanded.wrappedValue.toggle()
+                }
+            } label: {
+                HStack {
+                    Text(title)
+                        .foregroundColor(Color(hex: "0F1A2E"))
+                    Spacer()
+                    Text(selectionText)
+                        .font(.caption)
+                        .foregroundColor(Color(hex: "0F1A2E").opacity(0.65))
+                        .lineLimit(1)
+                    Image(systemName: isExpanded.wrappedValue ? "chevron.up" : "chevron.down")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .buttonStyle(.plain)
+
+            if isExpanded.wrappedValue {
+                ForEach(options, id: \.self) { option in
+                    Button {
+                        onSelect(option)
+                    } label: {
+                        HStack {
+                            Text(option)
+                                .foregroundColor(Color(hex: "0F1A2E"))
+                            Spacer()
+                            Image(systemName: selectionText == option ? "checkmark.circle.fill" : "circle")
+                                .foregroundColor(selectionText == option ? Color(hex: "2E5CFF") : .gray)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
             }
         }
     }

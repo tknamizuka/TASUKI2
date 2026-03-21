@@ -2,6 +2,8 @@ import SwiftUI
 
 struct ProfileEditView: View {
     @Environment(\.dismiss) var dismiss
+    @Environment(\.openURL) private var openURL
+    @EnvironmentObject var authManager: AuthManager
     
     // 永続化用ストレージ
     @AppStorage("myName") private var storedName: String = "Hiro"
@@ -26,6 +28,8 @@ struct ProfileEditView: View {
     
     // Bio
     @AppStorage("myBio") private var storedBio: String = "平日は仕事終わりに5-10km走ってます！週末は距離走やりたいです。"
+    @AppStorage("realityMiningConsentEnabled") private var realityMiningConsentEnabled: Bool = false
+    @AppStorage("runningDataSource") private var runningDataSourceRaw: String = RunningDataSource.all.rawValue
     
     // 編集用の一時状態
     @State private var name: String = ""
@@ -50,6 +54,15 @@ struct ProfileEditView: View {
     // 初期値スナップショット（変更検知用）
     @State private var initialSnapshot: ProfileSnapshot?
     @State private var showDiscardAlert = false
+    @State private var integrationNotice: String?
+
+    private var selectedRunningDataSource: RunningDataSource {
+        RunningDataSource(rawValue: runningDataSourceRaw) ?? .all
+    }
+
+    private var companionSources: [RunningDataSource] {
+        RunningDataSource.allCases.filter { $0 != .all }
+    }
     
     private var hasChanges: Bool {
         guard let snapshot = initialSnapshot else { return false }
@@ -128,6 +141,74 @@ struct ProfileEditView: View {
                     TextEditor(text: $bio)
                         .frame(height: 100)
                 }
+
+                Section(header: Text("Reality Mining")) {
+                    Toggle(isOn: $realityMiningConsentEnabled) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("行動データ収集を許可")
+                                .font(.system(size: 15, weight: .semibold))
+                            Text("推奨精度向上のために、画面利用やランニング関連イベントを収集します。")
+                                .font(.system(size: 12))
+                                .foregroundColor(Color(hex: "0F1A2E").opacity(0.6))
+                        }
+                    }
+                    .tint(Color.tasukiAccent)
+                }
+
+                Section(header: Text("デバイス連携")) {
+                    Picker("取得元", selection: Binding(
+                        get: { selectedRunningDataSource },
+                        set: { newValue in
+                            runningDataSourceRaw = newValue.rawValue
+                            RealityMiningManager.shared.trackEvent(
+                                name: "running_data_source_changed",
+                                properties: ["source": newValue.rawValue]
+                            )
+                        })
+                    ) {
+                        ForEach(RunningDataSource.allCases) { source in
+                            Text(source.displayName).tag(source)
+                        }
+                    }
+                    Text("選択したサービスの記録がAppleヘルスへ同期されている場合、TASUKIで読み取りできます。")
+                        .font(.caption)
+                        .foregroundColor(Color(hex: "0F1A2E").opacity(0.6))
+
+                    ForEach(companionSources) { source in
+                        Button {
+                            runningDataSourceRaw = source.rawValue
+                            openCompanionApp(for: source)
+                        } label: {
+                            HStack {
+                                Text(source.displayName)
+                                    .foregroundColor(Color.tasukiPrimary)
+                                Spacer()
+                                if selectedRunningDataSource == source {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundColor(Color.tasukiAccent)
+                                }
+                            }
+                        }
+                    }
+
+                    if let integrationNotice {
+                        Text(integrationNotice)
+                            .font(.caption)
+                            .foregroundColor(Color.tasukiAccent)
+                    }
+                }
+
+                Section {
+                    Button(role: .destructive) {
+                        authManager.signOut { result in
+                            if case let .failure(error) = result {
+                                print("Sign out failed: \(error.localizedDescription)")
+                            }
+                        }
+                    } label: {
+                        Text("ログアウト")
+                    }
+                }
             }
             .navigationTitle("プロフィール編集")
             .navigationBarTitleDisplayMode(.inline)
@@ -190,6 +271,9 @@ struct ProfileEditView: View {
                         bio: bio
                     )
                 }
+            }
+            .onChange(of: realityMiningConsentEnabled) { newValue in
+                RealityMiningManager.shared.updateConsent(enabled: newValue)
             }
             .alert("変更を保存せずに戻りますか？", isPresented: $showDiscardAlert) {
                 Button("キャンセル", role: .cancel) {}
@@ -261,8 +345,40 @@ private extension ProfileEditView {
         
         dismiss()
     }
+
+    func openCompanionApp(for source: RunningDataSource) {
+        if source == .appleHealth {
+            integrationNotice = "Apple Health を取得元に設定しました"
+            return
+        }
+        let links = source.deepLinks
+        guard !links.isEmpty else {
+            integrationNotice = "\(source.displayName) の起動リンクが未設定です"
+            return
+        }
+        func tryOpen(_ index: Int) {
+            if index >= links.count {
+                if let appStore = source.appStoreURL {
+                    openURL(appStore)
+                    integrationNotice = "\(source.displayName) アプリが未インストールのためApp Storeを開きました"
+                } else {
+                    integrationNotice = "\(source.displayName) を開けませんでした"
+                }
+                return
+            }
+            openURL(links[index]) { accepted in
+                if accepted {
+                    integrationNotice = "\(source.displayName) を開きました"
+                } else {
+                    tryOpen(index + 1)
+                }
+            }
+        }
+        tryOpen(0)
+    }
 }
 
 #Preview {
     ProfileEditView()
+        .environmentObject(AuthManager())
 }

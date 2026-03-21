@@ -83,18 +83,19 @@ struct HomeView: View {
                         .fontWeight(.bold)
                         .tracking(2)
                         .foregroundColor(Color.tasukiMutedText)
-                    Text("TASUKI")
-                        .font(.system(size: 32, weight: .heavy))
-                        .tracking(4)
-                        .foregroundColor(Color.tasukiPrimary)
+                    ZStack {
+                        Image("runner")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(height: 70)
+                            .opacity(0.22)
+                        Text("TASUKI")
+                            .font(.system(size: 32, weight: .heavy))
+                            .tracking(4)
+                            .foregroundColor(Color.tasukiPrimary)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .center)
-
-                Image("runner")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(height: 64)
-                    .frame(maxWidth: .infinity)
 
                 Button {
                     if !isHealthKitLoading { showRunHistory = true }
