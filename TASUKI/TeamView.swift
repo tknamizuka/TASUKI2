@@ -462,6 +462,8 @@ struct TeamView: View {
                 Text(teamName)
                     .font(.system(size: 18, weight: .bold))
                     .foregroundColor(Color.tasukiPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                 if !selectedTeamId.isEmpty {
                     let total = PointService.shared.teamTotalPoints(teamId: selectedTeamId)
                     let tier = TeamRankTier.tier(forTeamPoints: total)
@@ -540,7 +542,11 @@ struct TeamView: View {
                 .font(.system(size: 12))
                 .foregroundColor(Color.tasukiMutedText)
             
-            HStack(spacing: 8) {
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 52), spacing: 8)],
+                alignment: .leading,
+                spacing: 8
+            ) {
                 ForEach(0..<state.event.legCount, id: \.self) { i in
                     let leg = state.legs.first { $0.id == i }
                     let isDone = leg?.status == .submitted
@@ -551,6 +557,7 @@ struct TeamView: View {
                             .foregroundColor(isDone ? Color(hex: "34C759") : (isCurrent ? Color.tasukiAccentOrange : Color.tasukiMutedText))
                         Text("\(i + 1)区")
                             .font(.system(size: 11, weight: .medium))
+                            .minimumScaleFactor(0.85)
                             .foregroundColor(isDone || isCurrent ? Color.tasukiPrimary : Color.tasukiMutedText)
                     }
                 }
@@ -747,48 +754,30 @@ struct TeamView: View {
             .padding(.vertical, 10)
             .padding(.horizontal, 12)
             
-            HStack(spacing: 8) {
-                if canSubmit {
-                    Button(action: onTapSubmit) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "figure.run")
-                            Text("区間を走って提出")
-                                .font(.system(size: 13, weight: .semibold))
-                        }
-                        .foregroundColor(Color.tasukiAccentOrange)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                    }
-                    .buttonStyle(.plain)
-                    if let onPass = onTapPassTasuki {
-                        Button(action: onPass) {
-                            HStack(spacing: 6) {
-                                Image(systemName: "arrow.right.circle")
-                                Text("TASUKIをつなぐ")
-                                    .font(.system(size: 13, weight: .semibold))
-                            }
-                            .foregroundColor(Color.tasukiMutedText)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 8)
-                            .background(RoundedRectangle(cornerRadius: 8).fill(Color.tasukiDarkCardSecondary))
-                        }
-                        .buttonStyle(.plain)
-                    }
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) {
+                    ekidenLegActionButtons(
+                        leg: leg,
+                        canSubmit: canSubmit,
+                        allowSubmit: allowSubmit,
+                        isTeamOwner: isTeamOwner,
+                        substituteButtonFullWidth: false,
+                        onTapSubmit: onTapSubmit,
+                        onTapSubstitute: onTapSubstitute,
+                        onTapPassTasuki: onTapPassTasuki
+                    )
                 }
-                // オーナー: 代走設定（TASUKI待ち・提出可能の区間のみ）
-                if isTeamOwner && allowSubmit && (leg.status == .ready || leg.status == .awaitingTasuki) {
-                    Button(action: onTapSubstitute) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "person.2")
-                            Text("代走")
-                                .font(.system(size: 12, weight: .medium))
-                        }
-                        .foregroundColor(Color.tasukiMutedText)
-                        .padding(.vertical, 6)
-                        .padding(.horizontal, 10)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(Color.tasukiDarkCardSecondary))
-                    }
-                    .buttonStyle(.plain)
+                VStack(spacing: 8) {
+                    ekidenLegActionButtons(
+                        leg: leg,
+                        canSubmit: canSubmit,
+                        allowSubmit: allowSubmit,
+                        isTeamOwner: isTeamOwner,
+                        substituteButtonFullWidth: true,
+                        onTapSubmit: onTapSubmit,
+                        onTapSubstitute: onTapSubstitute,
+                        onTapPassTasuki: onTapPassTasuki
+                    )
                 }
             }
         }
@@ -796,6 +785,61 @@ struct TeamView: View {
             RoundedRectangle(cornerRadius: 8)
                 .fill(leg.status == .ready ? Color.tasukiAccentOrange.opacity(0.12) : Color.tasukiDarkCardSecondary)
         )
+    }
+    
+    @ViewBuilder
+    private func ekidenLegActionButtons(
+        leg: EkidenLeg,
+        canSubmit: Bool,
+        allowSubmit: Bool,
+        isTeamOwner: Bool,
+        substituteButtonFullWidth: Bool,
+        onTapSubmit: @escaping () -> Void,
+        onTapSubstitute: @escaping () -> Void,
+        onTapPassTasuki: (() -> Void)?
+    ) -> some View {
+        if canSubmit {
+            Button(action: onTapSubmit) {
+                HStack(spacing: 6) {
+                    Image(systemName: "figure.run")
+                    Text("区間を走って提出")
+                        .font(.system(size: 13, weight: .semibold))
+                }
+                .foregroundColor(Color.tasukiAccentOrange)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+            }
+            .buttonStyle(.plain)
+            if let onPass = onTapPassTasuki {
+                Button(action: onPass) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrow.right.circle")
+                        Text("TASUKIをつなぐ")
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                    .foregroundColor(Color.tasukiMutedText)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(Color.tasukiDarkCardSecondary))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        if isTeamOwner && allowSubmit && (leg.status == .ready || leg.status == .awaitingTasuki) {
+            Button(action: onTapSubstitute) {
+                HStack(spacing: 4) {
+                    Image(systemName: "person.2")
+                    Text("代走")
+                        .font(.system(size: 12, weight: .medium))
+                }
+                .foregroundColor(Color.tasukiMutedText)
+                .frame(maxWidth: substituteButtonFullWidth ? .infinity : nil)
+                .padding(.vertical, 6)
+                .padding(.horizontal, 10)
+                .background(RoundedRectangle(cornerRadius: 8).fill(Color.tasukiDarkCardSecondary))
+            }
+            .buttonStyle(.plain)
+        }
     }
     
     // MARK: - Slim Member List View
@@ -911,6 +955,8 @@ struct TeamView: View {
                 Text(teamName)
                     .font(.system(size: 18, weight: .bold))
                     .foregroundColor(Color.tasukiPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                 if !selectedTeamId.isEmpty {
                     let total = PointService.shared.teamTotalPoints(teamId: selectedTeamId)
                     let tier = TeamRankTier.tier(forTeamPoints: total)

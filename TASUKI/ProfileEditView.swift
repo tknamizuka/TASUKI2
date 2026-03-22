@@ -348,29 +348,37 @@ private extension ProfileEditView {
 
     func openCompanionApp(for source: RunningDataSource) {
         if source == .appleHealth {
-            integrationNotice = "Apple Health を取得元に設定しました"
+            DispatchQueue.main.async {
+                integrationNotice = "Apple Health を取得元に設定しました"
+            }
             return
         }
         let links = source.deepLinks
         guard !links.isEmpty else {
-            integrationNotice = "\(source.displayName) の起動リンクが未設定です"
+            DispatchQueue.main.async {
+                integrationNotice = "\(source.displayName) の起動リンクが未設定です"
+            }
             return
         }
         func tryOpen(_ index: Int) {
             if index >= links.count {
-                if let appStore = source.appStoreURL {
-                    openURL(appStore)
-                    integrationNotice = "\(source.displayName) アプリが未インストールのためApp Storeを開きました"
-                } else {
-                    integrationNotice = "\(source.displayName) を開けませんでした"
+                DispatchQueue.main.async {
+                    if let appStore = source.appStoreURL {
+                        openURL(appStore)
+                        integrationNotice = "\(source.displayName) アプリが未インストールのためApp Storeを開きました"
+                    } else {
+                        integrationNotice = "\(source.displayName) を開けませんでした"
+                    }
                 }
                 return
             }
             openURL(links[index]) { accepted in
-                if accepted {
-                    integrationNotice = "\(source.displayName) を開きました"
-                } else {
-                    tryOpen(index + 1)
+                DispatchQueue.main.async {
+                    if accepted {
+                        integrationNotice = "\(source.displayName) を開きました"
+                    } else {
+                        tryOpen(index + 1)
+                    }
                 }
             }
         }

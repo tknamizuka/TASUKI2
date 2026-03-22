@@ -149,7 +149,7 @@ final class AuthManager: ObservableObject {
             oauthProvider.scopes = provider.scopes
         }
 
-        Auth.auth().signIn(with: oauthProvider, uiDelegate: nil) { [weak self] _, error in
+        Auth.auth().signIn(with: oauthProvider, uiDelegate: AuthUIDelegateHelper.shared) { [weak self] _, error in
             DispatchQueue.main.async {
                 guard let self = self else { return }
                 if let error = error as NSError? {
