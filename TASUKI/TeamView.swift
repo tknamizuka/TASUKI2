@@ -28,6 +28,19 @@ struct TeamChatMessage: Identifiable {
     let timestamp: Date
 }
 
+/// 区間提出シート用。`sheet(isPresented:)` と optional の組み合わせでは中身が空になることがあるため `sheet(item:)` で渡す。
+private struct EkidenSubmitSheetItem: Identifiable {
+    let id: String
+    let leg: EkidenLeg
+    let state: EkidenViewState
+
+    init(leg: EkidenLeg, state: EkidenViewState) {
+        self.leg = leg
+        self.state = state
+        self.id = "\(state.event.id)-leg-\(leg.id)"
+    }
+}
+
 // MARK: - Team View
 struct TeamView: View {
     private let maxTeamMembers = 10
@@ -54,11 +67,10 @@ struct TeamView: View {
     
     // 駅伝イベント状態（MVP UI）
     @State private var ekidenViewState: EkidenViewState? = nil
-    @State private var showEkidenSubmitSheet = false
-    @State private var selectedLegForSubmit: (leg: EkidenLeg, state: EkidenViewState)? = nil
+    /// `.sheet(isPresented:)` + optional だと内容が空の白シートになることがあるため `item` で提示する
+    @State private var ekidenSubmitSheetItem: EkidenSubmitSheetItem? = nil
     @State private var showEkidenResultView = false
-    @State private var selectedLegForSubstitute: (leg: EkidenLeg, state: EkidenViewState)? = nil
-    @State private var showEkidenSubstituteSheet = false
+    @State private var ekidenSubstituteSheetItem: EkidenSubmitSheetItem? = nil
     @State private var showPassTasukiConfirm = false
     @State private var passTasukiLegIndex: Int? = nil
     @State private var isPassingTasuki = false
@@ -288,23 +300,20 @@ struct TeamView: View {
                         myStatusMessage: myStatusMessage
                     )
                 }
-                .sheet(isPresented: $showEkidenSubstituteSheet) {
-                    if let pair = selectedLegForSubstitute {
-                        EkidenSubstituteSheet(
-                            leg: pair.leg,
-                            state: pair.state,
-                            teamId: selectedTeamId,
-                            entryId: pair.state.entry.id,
-                            isSampleTeam: isSampleTeamFlow || selectedTeamId.hasPrefix("example"),
-                            onDismiss: {
-                                showEkidenSubstituteSheet = false
-                                selectedLegForSubstitute = nil
-                            },
-                            onSuccess: {
-                                Task { await loadEkidenState(teamId: selectedTeamId) }
-                            }
-                        )
-                    }
+                .sheet(item: $ekidenSubstituteSheetItem) { item in
+                    EkidenSubstituteSheet(
+                        leg: item.leg,
+                        state: item.state,
+                        teamId: selectedTeamId,
+                        entryId: item.state.entry.id,
+                        isSampleTeam: isSampleTeamFlow || selectedTeamId.hasPrefix("example"),
+                        onDismiss: {
+                            ekidenSubstituteSheetItem = nil
+                        },
+                        onSuccess: {
+                            Task { await loadEkidenState(teamId: selectedTeamId) }
+                        }
+                    )
                 }
                 .sheet(isPresented: $showEkidenResultView) {
                     if let state = ekidenViewState {
@@ -313,22 +322,19 @@ struct TeamView: View {
                         })
                     }
                 }
-                .sheet(isPresented: $showEkidenSubmitSheet) {
-                    if let pair = selectedLegForSubmit {
-                        EkidenLegSubmitSheet(
-                            leg: pair.leg,
-                            state: pair.state,
-                            teamId: selectedTeamId,
-                            isSampleTeam: isSampleTeamFlow || selectedTeamId.hasPrefix("example"),
-                            onDismiss: {
-                                showEkidenSubmitSheet = false
-                                selectedLegForSubmit = nil
-                            },
-                            onSuccess: {
-                                Task { await loadEkidenState(teamId: selectedTeamId) }
-                            }
-                        )
-                    }
+                .sheet(item: $ekidenSubmitSheetItem) { item in
+                    EkidenLegSubmitSheet(
+                        leg: item.leg,
+                        state: item.state,
+                        teamId: selectedTeamId,
+                        isSampleTeam: isSampleTeamFlow || selectedTeamId.hasPrefix("example"),
+                        onDismiss: {
+                            ekidenSubmitSheetItem = nil
+                        },
+                        onSuccess: {
+                            Task { await loadEkidenState(teamId: selectedTeamId) }
+                        }
+                    )
                 }
                 .onAppear {
                     selectedCondition = myCondition
@@ -698,12 +704,10 @@ struct TeamView: View {
                         allowSubmit: allowSubmit,
                         isTeamOwner: isTeamOwner,
                         onTapSubmit: {
-                            selectedLegForSubmit = (leg: leg, state: state)
-                            showEkidenSubmitSheet = true
+                            ekidenSubmitSheetItem = EkidenSubmitSheetItem(leg: leg, state: state)
                         },
                         onTapSubstitute: {
-                            selectedLegForSubstitute = (leg: leg, state: state)
-                            showEkidenSubstituteSheet = true
+                            ekidenSubstituteSheetItem = EkidenSubmitSheetItem(leg: leg, state: state)
                         },
                         onTapPassTasuki: {
                             passTasukiLegIndex = leg.id
