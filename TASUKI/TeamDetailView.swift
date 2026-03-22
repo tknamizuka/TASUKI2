@@ -131,8 +131,13 @@ struct TeamDetailView: View {
         .toolbar {
             if let currentUid = effectiveCurrentUid, ownerUid == currentUid {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    NavigationLink(destination: TeamManageView(teamId: teamId)) {
-                        Text("参加申請").foregroundColor(Color.tasukiPrimary)
+                    HStack(spacing: 16) {
+                        NavigationLink(destination: EkidenLegAssignmentView(teamId: teamId)) {
+                            Text("区間割当").foregroundColor(Color.tasukiPrimary)
+                        }
+                        NavigationLink(destination: TeamManageView(teamId: teamId)) {
+                            Text("参加申請").foregroundColor(Color.tasukiPrimary)
+                        }
                     }
                 }
             }

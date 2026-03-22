@@ -58,6 +58,13 @@ struct TeamManageView: View {
             await loadRequests()
         }
         .navigationTitle("参加申請")
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                NavigationLink(destination: EkidenLegAssignmentView(teamId: teamId)) {
+                    Text("区間割当").foregroundColor(Color.tasukiPrimary)
+                }
+            }
+        }
     }
 
     private func loadRequests() async {

@@ -52,6 +52,9 @@ struct TeamView: View {
     // オーナーかどうか（メンバー管理の表示用）
     @State private var isTeamOwner: Bool = false
     
+    // 駅伝イベント状態（MVP UI）
+    @State private var ekidenViewState: EkidenViewState? = nil
+    
     // チーム情報
     @State private var teamName: String = "皇居ランナーズ"
     @State private var league: String = "Gold League"
@@ -159,12 +162,23 @@ struct TeamView: View {
                     
                     ScrollView {
                         VStack(spacing: 20) {
-                            progressView
-                                .padding(.horizontal, 20)
-                                .padding(.top, 20)
+                            Group {
+                                if let ekiden = ekidenViewState, ekiden.isWithinEventWindow {
+                                    ekidenProgressCard(ekiden)
+                                } else {
+                                    progressView
+                                }
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.top, 20)
                             
-                            slimMemberListView
-                                .padding(.horizontal, 20)
+                            if let ekiden = ekidenViewState, ekiden.isWithinEventWindow {
+                                ekidenLegListView(ekiden)
+                                    .padding(.horizontal, 20)
+                            } else {
+                                slimMemberListView
+                                    .padding(.horizontal, 20)
+                            }
                             
                             // オーナーのみ: メンバー管理（参加申請・チーム詳細）へ
                             if isTeamOwner {
@@ -243,13 +257,23 @@ struct TeamView: View {
                     }
                     if let tid = userTeamId, !tid.isEmpty {
                         loadTeamOwner(teamId: tid)
+                        Task { await loadEkidenState(teamId: tid) }
                     }
                 }
                 .onChange(of: userTeamId) { _, newId in
                     if let tid = newId, !tid.isEmpty {
                         loadTeamOwner(teamId: tid)
+                        Task { await loadEkidenState(teamId: tid) }
                     } else {
                         isTeamOwner = false
+                        ekidenViewState = nil
+                    }
+                }
+                .onChange(of: selectedTeamId) { _, newId in
+                    if !newId.isEmpty {
+                        Task { await loadEkidenState(teamId: newId) }
+                    } else {
+                        ekidenViewState = nil
                     }
                 }
             }
@@ -278,6 +302,15 @@ struct TeamView: View {
         }
     }
     
+    /// 駅伝イベント状態を取得
+    private func loadEkidenState(teamId: String) async {
+        let isSample = isSampleTeamFlow || teamId.hasPrefix("example")
+        let state = await EkidenDataService.shared.loadEkidenState(teamId: teamId, isSampleTeam: isSample)
+        await MainActor.run {
+            ekidenViewState = state
+        }
+    }
+    
     /// チームのオーナーかどうかを取得（メンバー管理ボタン表示用）
     private func loadTeamOwner(teamId: String) {
         // サンプルチーム: example_owner のときだけオーナー
@@ -299,6 +332,269 @@ struct TeamView: View {
                 self.isTeamOwner = (ownerUid == currentUid)
             }
         }
+    }
+    
+    // MARK: - Ekiden Progress Card（駅伝進行カード）
+    private func ekidenProgressCard(_ state: EkidenViewState) -> some View {
+        let calendar = Calendar.current
+        let now = Date()
+        let remainingDays = max(0, calendar.dateComponents([.day], from: now, to: state.event.endAt).day ?? 0)
+        let dateFormatter = DateFormatter()
+        dateFormatter.locale = Locale(identifier: "ja_JP")
+        dateFormatter.dateFormat = "M/d"
+        let startStr = dateFormatter.string(from: state.event.startAt)
+        let endStr = dateFormatter.string(from: state.event.endAt)
+        
+        let currentLegIndex = state.entry.currentLegIndex
+        let legProgress = state.event.legCount > 0 ? Double(state.submittedLegCount) / Double(state.event.legCount) * 100 : 0
+        
+        return VStack(spacing: 16) {
+            HStack(spacing: 8) {
+                Text(teamName)
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(Color.tasukiPrimary)
+                if !selectedTeamId.isEmpty {
+                    let total = PointService.shared.teamTotalPoints(teamId: selectedTeamId)
+                    let tier = TeamRankTier.tier(forTeamPoints: total)
+                    Text(tier.displayName)
+                        .font(.system(size: 11, weight: .semibold))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(tier.color.opacity(0.2)))
+                        .foregroundColor(tier.color)
+                }
+                Spacer()
+                if let rank = state.provisionalRank {
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text("暫定 \(rank)位")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(Color.tasukiAccentOrange)
+                        Text(state.totalTeams > 0 ? "/\(state.totalTeams)チーム" : "")
+                            .font(.system(size: 10))
+                            .foregroundColor(Color.tasukiMutedText)
+                    }
+                }
+            }
+            .padding(.bottom, 4)
+            
+            // イベント期間
+            Text("\(startStr) 〜 \(endStr)")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(Color.tasukiPrimary)
+            Text("あと \(remainingDays) 日")
+                .font(.system(size: 13))
+                .foregroundColor(Color.tasukiMutedText)
+            
+            // 区間進行
+            HStack(spacing: 4) {
+                Text("現在")
+                    .font(.system(size: 12))
+                    .foregroundColor(Color.tasukiMutedText)
+                Text("\(min(currentLegIndex + 1, state.event.legCount))区")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(Color.tasukiAccentOrange)
+            }
+            
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.tasukiDarkCardSecondary)
+                        .frame(height: 20)
+                    
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(
+                            LinearGradient(
+                                gradient: Gradient(colors: [
+                                    Color(hex: "2E5CFF"),
+                                    Color.tasukiAccentOrange
+                                ]),
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(width: geometry.size.width * CGFloat(min(legProgress / 100, 1.0)), height: 20)
+                }
+            }
+            .frame(height: 20)
+            
+            HStack(spacing: 8) {
+                ForEach(0..<state.event.legCount, id: \.self) { i in
+                    let leg = state.legs.first { $0.id == i }
+                    let isDone = leg?.status == .submitted
+                    let isCurrent = leg?.status == .ready
+                    HStack(spacing: 2) {
+                        Image(systemName: isDone ? "checkmark.circle.fill" : (isCurrent ? "figure.run" : "circle"))
+                            .font(.system(size: 12))
+                            .foregroundColor(isDone ? Color(hex: "34C759") : (isCurrent ? Color.tasukiAccentOrange : Color.tasukiMutedText))
+                        Text("\(i + 1)区")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(isDone || isCurrent ? Color.tasukiPrimary : Color.tasukiMutedText)
+                    }
+                }
+            }
+            
+            // 襷受け渡し
+            if let name = state.nextRunnerName(), state.legs.contains(where: { $0.status == .ready }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "figure.run")
+                        .font(.system(size: 14))
+                        .foregroundColor(Color.tasukiAccentOrange)
+                    Text("襷を受け取り: \(name)")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(Color.tasukiPrimary)
+                    Text("（提出可能）")
+                        .font(.system(size: 12))
+                        .foregroundColor(Color.tasukiMutedText)
+                }
+                .padding(.vertical, 8)
+                .padding(.horizontal, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color.tasukiAccentOrange.opacity(0.15))
+                )
+            } else {
+                let lastSubmitted = state.legs.last { $0.status == .submitted }
+                let nextLeg = state.legs.first { $0.status == .awaitingTasuki }
+                if let next = nextLeg, let uid = next.assignedUid, let name = state.memberNames[uid] {
+                    HStack(spacing: 6) {
+                        Image(systemName: "clock")
+                            .font(.system(size: 14))
+                            .foregroundColor(Color.tasukiMutedText)
+                        Text("次走者: \(name)")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(Color.tasukiMutedText)
+                    }
+                } else if lastSubmitted != nil && state.submittedLegCount >= state.event.legCount {
+                    HStack(spacing: 6) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 14))
+                            .foregroundColor(Color(hex: "34C759"))
+                        Text("全区間完了")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(Color.tasukiPrimary)
+                    }
+                }
+            }
+            
+            // 累積タイム
+            if state.totalElapsedSeconds > 0 {
+                HStack {
+                    Text("累計タイム")
+                        .font(.system(size: 12))
+                        .foregroundColor(Color.tasukiMutedText)
+                    Text(EkidenViewState.formatElapsed(state.totalElapsedSeconds))
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(Color.tasukiPrimary)
+                }
+            }
+        }
+        .padding(.vertical, 24)
+        .padding(.horizontal, 20)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.tasukiDarkCard)
+        )
+    }
+    
+    // MARK: - Ekiden Leg List View（区間担当行）
+    private func ekidenLegListView(_ state: EkidenViewState) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("区間担当")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(Color.tasukiPrimary)
+                Spacer()
+                Text("\(state.legs.count)区間")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(Color.tasukiMutedText)
+            }
+            .padding(.horizontal, 4)
+            
+            VStack(spacing: 8) {
+                ForEach(state.legs, id: \.id) { leg in
+                    ekidenLegRowView(leg: leg, state: state)
+                }
+            }
+            
+            Button(action: {
+                selectedCondition = myCondition
+                showConditionSheet = true
+            }) {
+                HStack {
+                    Spacer()
+                    Text("調子を記録する")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white)
+                    Spacer()
+                }
+                .frame(height: 40)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color.tasukiAccentOrange)
+                )
+            }
+            .padding(.top, 8)
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.tasukiDarkCard)
+        )
+    }
+    
+    private func ekidenLegRowView(leg: EkidenLeg, state: EkidenViewState) -> some View {
+        let name = leg.assignedUid.flatMap { state.memberNames[$0] } ?? "未割当"
+        let statusText: String
+        let statusColor: Color
+        let icon: String
+        switch leg.status {
+        case .submitted:
+            let timeStr = leg.elapsedSeconds.map { EkidenViewState.formatElapsed($0) } ?? "—"
+            statusText = leg.isUnderTarget ? "未達 \(timeStr)" : timeStr
+            statusColor = leg.isUnderTarget ? Color.tasukiMutedText : Color(hex: "34C759")
+            icon = "checkmark.circle.fill"
+        case .ready:
+            statusText = "提出可能"
+            statusColor = Color.tasukiAccentOrange
+            icon = "figure.run"
+        case .awaitingTasuki:
+            statusText = "襷待ち"
+            statusColor = Color.tasukiMutedText
+            icon = "clock"
+        }
+        
+        return HStack(spacing: 12) {
+            Text("\(leg.id + 1)区")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(Color.tasukiPrimary)
+                .frame(width: 32, alignment: .leading)
+            
+            Image(systemName: "person.circle.fill")
+                .font(.system(size: 20))
+                .foregroundColor(Color.tasukiPrimary)
+                .saturation(0)
+            
+            Text(name)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(Color.tasukiPrimary)
+            
+            Spacer()
+            
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 12))
+                    .foregroundColor(statusColor)
+                Text(statusText)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(statusColor)
+            }
+        }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(leg.status == .ready ? Color.tasukiAccentOrange.opacity(0.12) : Color.tasukiDarkCardSecondary)
+        )
     }
     
     // MARK: - Slim Member List View

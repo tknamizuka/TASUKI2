@@ -86,6 +86,11 @@ service cloud.firestore {
       match /teamChat/{messageId} {
         allow read, write: if isTeamMember(teamId);
       }
+
+      match /ekidenLegTemplate/{docId} {
+        allow read: if isTeamMember(teamId);
+        allow write: if isTeamOwner(teamId);
+      }
     }
 
     match /conversations/{conversationId} {
