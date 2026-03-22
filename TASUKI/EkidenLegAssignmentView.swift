@@ -178,12 +178,15 @@ struct EkidenLegAssignmentView: View {
 
         if teamId == "example" || teamId == "example_owner" {
             await MainActor.run {
-                memberUIDs = ["sample_owner", "u_kenji", "u_sacchan", "u_taka"]
+                memberUIDs = ["sample_owner", "u_kenji", "u_sacchan", "u_taka", "u_momo", "u_runner123", "u_yuki"]
                 memberNames = [
                     "sample_owner": "あなた（オーナー）",
                     "u_kenji": "Kenji_Run",
                     "u_sacchan": "さっちゃん",
-                    "u_taka": "Taka@Sub3"
+                    "u_taka": "Taka@Sub3",
+                    "u_momo": "Momo",
+                    "u_runner123": "Runner123",
+                    "u_yuki": "Yuki"
                 ]
                 ownerUid = "sample_owner"
                 assignments = (0..<memberUIDs.count).map { i in
@@ -199,12 +202,15 @@ struct EkidenLegAssignmentView: View {
         }
         if teamId == "example_member" {
             await MainActor.run {
-                memberUIDs = ["u_owner", "u_kenji", "u_sacchan", "u_taka"]
+                memberUIDs = ["u_owner", "u_kenji", "u_sacchan", "u_taka", "u_momo", "u_runner123", "u_yuki"]
                 memberNames = [
                     "u_owner": "オーナー",
                     "u_kenji": "Kenji_Run",
                     "u_sacchan": "さっちゃん",
-                    "u_taka": "Taka@Sub3"
+                    "u_taka": "Taka@Sub3",
+                    "u_momo": "Momo",
+                    "u_runner123": "Runner123",
+                    "u_yuki": "Yuki"
                 ]
                 ownerUid = "u_owner"
                 assignments = (0..<memberUIDs.count).map { i in

@@ -205,7 +205,8 @@ final class EkidenDataService {
     }
 
     private func loadMockEkidenState(teamId: String) async -> EkidenViewState? {
-        if let existing = MockEkidenStateHolder.shared.getState(teamId: teamId) {
+        if let existing = MockEkidenStateHolder.shared.getState(teamId: teamId),
+           existing.event.legCount == 7 {
             return await MainActor.run { existing }
         }
         let calendar = Calendar.current
@@ -213,18 +214,22 @@ final class EkidenDataService {
         let startAt = calendar.date(byAdding: .day, value: -7, to: now) ?? now
         let endAt = calendar.date(byAdding: .day, value: 23, to: now) ?? now
 
+        // 7区・各区の参考目標距離。チーム累計目標 teamGoalKm は 100（1区あたりおおよそ 100/7 km 前後のイメージ）。
         let legsDef = [
-            EkidenLegDefinition(id: 0, targetKm: 5.0, order: 1),
-            EkidenLegDefinition(id: 1, targetKm: 5.0, order: 2),
-            EkidenLegDefinition(id: 2, targetKm: 5.0, order: 3),
-            EkidenLegDefinition(id: 3, targetKm: 5.0, order: 4)
+            EkidenLegDefinition(id: 0, targetKm: 14.5, order: 1),
+            EkidenLegDefinition(id: 1, targetKm: 14.5, order: 2),
+            EkidenLegDefinition(id: 2, targetKm: 14.0, order: 3),
+            EkidenLegDefinition(id: 3, targetKm: 14.0, order: 4),
+            EkidenLegDefinition(id: 4, targetKm: 14.2, order: 5),
+            EkidenLegDefinition(id: 5, targetKm: 13.8, order: 6),
+            EkidenLegDefinition(id: 6, targetKm: 14.0, order: 7)
         ]
 
         let event = EkidenEvent(
             id: "mock_event_1",
             startAt: startAt,
             endAt: endAt,
-            legCount: 4,
+            legCount: 7,
             legs: legsDef,
             status: .active,
             rulesText: nil,
@@ -235,34 +240,46 @@ final class EkidenDataService {
         let memberUids: [String]
         let memberNames: [String: String]
         if teamId == "example_owner" {
-            memberUids = ["sample_owner", "u_kenji", "u_sacchan", "u_taka"]
+            memberUids = ["sample_owner", "u_kenji", "u_sacchan", "u_taka", "u_momo", "u_runner123", "u_yuki"]
             memberNames = [
                 "sample_owner": "あなた（オーナー）",
                 "u_kenji": "Kenji_Run",
                 "u_sacchan": "さっちゃん",
-                "u_taka": "Taka@Sub3"
+                "u_taka": "Taka@Sub3",
+                "u_momo": "Momo",
+                "u_runner123": "Runner123",
+                "u_yuki": "Yuki"
             ]
         } else if teamId == "example_member" {
-            memberUids = ["u_owner", "u_kenji", "u_sacchan", "u_taka"]
+            memberUids = ["u_owner", "u_kenji", "u_sacchan", "u_taka", "u_momo", "u_runner123", "u_yuki"]
             memberNames = [
                 "u_owner": "オーナー",
                 "u_kenji": "Kenji_Run",
                 "u_sacchan": "さっちゃん",
-                "u_taka": "Taka@Sub3"
+                "u_taka": "Taka@Sub3",
+                "u_momo": "Momo",
+                "u_runner123": "Runner123",
+                "u_yuki": "Yuki"
             ]
         } else {
-            memberUids = ["sample_owner", "u_kenji", "u_sacchan", "u_taka"]
+            memberUids = ["sample_owner", "u_kenji", "u_sacchan", "u_taka", "u_momo", "u_runner123", "u_yuki"]
             memberNames = [
                 "sample_owner": "あなた",
                 "u_kenji": "Kenji_Run",
                 "u_sacchan": "さっちゃん",
-                "u_taka": "Taka@Sub3"
+                "u_taka": "Taka@Sub3",
+                "u_momo": "Momo",
+                "u_runner123": "Runner123",
+                "u_yuki": "Yuki"
             ]
         }
 
+        let legTargets = legsDef.map(\.targetKm)
+
         var legs: [EkidenLeg] = []
-        for i in 0..<4 {
+        for i in 0..<7 {
             let uid = memberUids.indices.contains(i) ? memberUids[i] : nil
+            let targetKm = legTargets.indices.contains(i) ? legTargets[i] : 6.0
             let status: EkidenLegStatus
             let submittedAt: Date?
             let actualKm: Double?
@@ -271,19 +288,27 @@ final class EkidenDataService {
 
             switch i {
             case 0:
+                // 1区完了（約14km / 5:00/km 前後）
                 status = .submitted
-                submittedAt = calendar.date(byAdding: .hour, value: -2, to: now)
-                actualKm = 5.2
-                elapsed = 22 * 60  // 22分
+                submittedAt = calendar.date(byAdding: .hour, value: -3, to: now)
+                actualKm = 14.2
+                elapsed = 70 * 60 + 30  // 70:30
                 isUnder = false
             case 1:
+                // 2区：目標に対し距離不足で提出（ペースは遅め）
                 status = .submitted
-                submittedAt = calendar.date(byAdding: .hour, value: -1, to: now)
-                actualKm = 4.8
-                elapsed = 25 * 60  // 25分（未達）
+                submittedAt = calendar.date(byAdding: .hour, value: -2, to: now)
+                actualKm = 12.6
+                elapsed = 82 * 60 + 10  // 82:10
                 isUnder = true
             case 2:
-                status = .ready  // TASUKI渡し済み・提出可能
+                status = .submitted
+                submittedAt = calendar.date(byAdding: .hour, value: -1, to: now)
+                actualKm = 13.8
+                elapsed = 71 * 60 + 5  // 71:05
+                isUnder = false
+            case 3:
+                status = .ready  // TASUKI渡し済み・提出可能（4区）
                 submittedAt = nil
                 actualKm = nil
                 elapsed = nil
@@ -299,7 +324,7 @@ final class EkidenDataService {
             legs.append(EkidenLeg(
                 id: i,
                 assignedUid: uid,
-                targetKm: 5.0,
+                targetKm: targetKm,
                 status: status,
                 submittedAt: submittedAt,
                 actualDistanceKm: actualKm,
@@ -315,7 +340,7 @@ final class EkidenDataService {
             teamId: teamId,
             eventId: event.id,
             ownerUid: memberUids.first ?? "",
-            currentLegIndex: 2,
+            currentLegIndex: 3,
             tasukiState: "ready",
             createdAt: startAt,
             updatedAt: now

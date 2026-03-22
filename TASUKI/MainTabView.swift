@@ -62,6 +62,14 @@ struct MainTabView: View {
         }
     }
     
+    /// EKIDEN タブ（index 2）選択時はアクセントオレンジ、それ以外は従来どおり
+    private func ekidenTabAccentColor(index: Int) -> Color {
+        if index == 2 {
+            return selectedTab == 2 ? Color.tasukiAccentOrange : Color.tasukiMutedText
+        }
+        return selectedTab == index ? Color.tasukiPrimary : Color.tasukiMutedText
+    }
+    
     private var customTabBar: some View {
         HStack(spacing: 0) {
             ForEach(0..<tabItems.count, id: \.self) { index in
@@ -69,14 +77,15 @@ struct MainTabView: View {
                     VStack(spacing: 2) {
                         Image(systemName: tabItems[index].icon)
                             .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(ekidenTabAccentColor(index: index))
                         Text(tabItems[index].label)
-                            .font(.system(size: 9))
+                            .font(.system(size: index == 2 ? 10 : 9, weight: index == 2 ? .bold : .regular))
                             .lineLimit(1)
                             .minimumScaleFactor(0.7)
+                            .foregroundColor(ekidenTabAccentColor(index: index))
                     }
                     .padding(.vertical, 8)
                     .frame(maxWidth: .infinity)
-                    .foregroundColor(selectedTab == index ? Color.tasukiPrimary : Color.tasukiMutedText)
                     .background(
                         RoundedRectangle(cornerRadius: 10)
                             .fill(selectedTab == index ? Color.tasukiSurface : .clear)

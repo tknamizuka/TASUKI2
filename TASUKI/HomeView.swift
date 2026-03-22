@@ -226,6 +226,7 @@ struct HomeView: View {
         .sheet(isPresented: $showPracticeCalendar) {
             PracticeScheduleCalendarView(store: joinedPracticesStore)
         }
+        .navigationTitle("Home")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {

@@ -84,7 +84,8 @@ struct TeamView: View {
             TeamMember(name: "さっちゃん", avatarImage: "person.circle.fill", currentDistance: 72.0, targetDistance: 100.0, condition: .good, statusMessage: "今月も頑張ります！週3回のペースで走ってます"),
             TeamMember(name: "Taka@Sub3", avatarImage: "person.circle.fill", currentDistance: 68.0, targetDistance: 100.0, condition: .good, statusMessage: "週末の朝ランが楽しみです！"),
             TeamMember(name: "Momo", avatarImage: "person.circle.fill", currentDistance: 65.0, targetDistance: 100.0, condition: .tired, statusMessage: "最近忙しくて疲れ気味...でも走りたい！"),
-            TeamMember(name: "Runner123", avatarImage: "person.circle.fill", currentDistance: 35.0, targetDistance: 100.0, condition: .sos, statusMessage: "足を痛めてしまいました...しばらく休みます💦")
+            TeamMember(name: "Runner123", avatarImage: "person.circle.fill", currentDistance: 35.0, targetDistance: 100.0, condition: .sos, statusMessage: "足を痛めてしまいました...しばらく休みます💦"),
+            TeamMember(name: "Yuki", avatarImage: "person.circle.fill", currentDistance: 58.0, targetDistance: 100.0, condition: .good, statusMessage: "ペースはゆっくり、距離を積み上げていきます")
         ]
         
         // 自分を先頭に追加
@@ -108,6 +109,32 @@ struct TeamView: View {
     var progressPercentage: Double {
         guard targetDistance > 0 else { return 0 }
         return min(currentDistance / targetDistance, 1.0) * 100
+    }
+    
+    /// メインタブバーとの干渉を緩和する ScrollView 下端の余白
+    private let scrollContentBottomPadding: CGFloat = 80
+    /// 右上チャット FAB とカード内の順位・pt 表示が重ならないように確保する幅
+    private let teamViewChatFABReserveWidth: CGFloat = 64
+    
+    @ViewBuilder
+    private var conditionRecordButton: some View {
+        Button(action: {
+            selectedCondition = myCondition
+            showConditionSheet = true
+        }) {
+            HStack {
+                Spacer()
+                Text("調子を記録する")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
+                Spacer()
+            }
+            .frame(height: 40)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color.tasukiAccentOrange)
+            )
+        }
     }
     
     // 今月の月末日を取得
@@ -181,6 +208,8 @@ struct TeamView: View {
                             .padding(.top, 20)
                             
                             if let ekiden = ekidenViewState {
+                                conditionRecordButton
+                                    .padding(.horizontal, 20)
                                 ekidenLegListView(ekiden, allowSubmit: ekiden.isWithinEventWindow)
                                     .padding(.horizontal, 20)
                             } else {
@@ -211,6 +240,7 @@ struct TeamView: View {
                                 .padding(.bottom, 20)
                             }
                         }
+                        .padding(.bottom, scrollContentBottomPadding)
                     }
                     
                     NavigationLink(destination: TeamDetailView(teamId: selectedTeamId), isActive: $showTeamDetail) {
@@ -484,15 +514,20 @@ struct TeamView: View {
                             .font(.system(size: 10))
                             .foregroundColor(Color.tasukiMutedText)
                     }
+                    .padding(.trailing, teamViewChatFABReserveWidth)
                 }
             }
             .padding(.bottom, 4)
             
-            // イベント期間
+            // イベント期間（1行）
             HStack(spacing: 8) {
-                Text("\(startStr) 〜 \(endStr)")
+                Text(isReadOnly
+                     ? "期間 \(startStr) 〜 \(endStr)（閲覧のみ）"
+                     : "期間 \(startStr) 〜 \(endStr)（あと\(remainingDays)日）")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(Color.tasukiPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
                 if isReadOnly {
                     Text("期間外")
                         .font(.system(size: 11, weight: .semibold))
@@ -501,10 +536,8 @@ struct TeamView: View {
                         .background(RoundedRectangle(cornerRadius: 6).fill(Color.tasukiMutedText.opacity(0.3)))
                         .foregroundColor(Color.tasukiMutedText)
                 }
+                Spacer(minLength: 0)
             }
-            Text(isReadOnly ? "閲覧のみ" : "あと \(remainingDays) 日")
-                .font(.system(size: 13))
-                .foregroundColor(Color.tasukiMutedText)
             
             // 区間進行
             HStack(spacing: 4) {
@@ -543,9 +576,11 @@ struct TeamView: View {
                 .foregroundColor(Color.tasukiMutedText)
             
             LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 52), spacing: 8)],
-                alignment: .leading,
-                spacing: 8
+                columns: Array(
+                    repeating: GridItem(.flexible(), spacing: 4),
+                    count: max(1, state.event.legCount)
+                ),
+                spacing: 4
             ) {
                 ForEach(0..<state.event.legCount, id: \.self) { i in
                     let leg = state.legs.first { $0.id == i }
@@ -557,9 +592,11 @@ struct TeamView: View {
                             .foregroundColor(isDone ? Color(hex: "34C759") : (isCurrent ? Color.tasukiAccentOrange : Color.tasukiMutedText))
                         Text("\(i + 1)区")
                             .font(.system(size: 11, weight: .medium))
-                            .minimumScaleFactor(0.85)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
                             .foregroundColor(isDone || isCurrent ? Color.tasukiPrimary : Color.tasukiMutedText)
                     }
+                    .frame(maxWidth: .infinity)
                 }
             }
             
@@ -675,25 +712,6 @@ struct TeamView: View {
                     )
                 }
             }
-            
-            Button(action: {
-                selectedCondition = myCondition
-                showConditionSheet = true
-            }) {
-                HStack {
-                    Spacer()
-                    Text("調子を記録する")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.white)
-                    Spacer()
-                }
-                .frame(height: 40)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color.tasukiAccentOrange)
-                )
-            }
-            .padding(.top, 8)
         }
         .padding(16)
         .background(
@@ -710,7 +728,11 @@ struct TeamView: View {
         switch leg.status {
         case .submitted:
             let timeStr = leg.elapsedSeconds.map { EkidenViewState.formatElapsed($0) } ?? "—"
-            statusText = timeStr
+            if let km = leg.actualDistanceKm {
+                statusText = String(format: "%.1fkm · %@", km, timeStr)
+            } else {
+                statusText = timeStr
+            }
             statusColor = Color(hex: "34C759")
             icon = "checkmark.circle.fill"
         case .ready:
@@ -862,24 +884,8 @@ struct TeamView: View {
                 }
             }
             
-            Button(action: {
-                selectedCondition = myCondition
-                showConditionSheet = true
-            }) {
-                HStack {
-                    Spacer()
-                    Text("調子を記録する")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.white)
-                    Spacer()
-                }
-                .frame(height: 40)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color.tasukiAccentOrange)
-                )
-            }
-            .padding(.top, 8)
+            conditionRecordButton
+                .padding(.top, 8)
         }
         .padding(16)
         .background(
@@ -977,6 +983,7 @@ struct TeamView: View {
                             .font(.system(size: 10))
                             .foregroundColor(Color.tasukiMutedText)
                     }
+                    .padding(.trailing, teamViewChatFABReserveWidth)
                 }
             }
             .padding(.bottom, 4)

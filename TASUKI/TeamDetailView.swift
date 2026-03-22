@@ -240,11 +240,11 @@ struct TeamDetailView: View {
                     "name": "皇居ランナーズ",
                     "inviteCode": "EX1234",
                     "requiresApproval": true,
-                    "members": ["sample_owner", "u_kenji", "u_sacchan", "u_taka"]
+                    "members": ["sample_owner", "u_kenji", "u_sacchan", "u_taka", "u_momo", "u_runner123", "u_yuki"]
                 ]
-                self.memberUIDs = ["sample_owner", "u_kenji", "u_sacchan", "u_taka"]
+                self.memberUIDs = ["sample_owner", "u_kenji", "u_sacchan", "u_taka", "u_momo", "u_runner123", "u_yuki"]
                 self.ownerUid = "sample_owner"
-                self.membersInfo = ["あなた（オーナー）", "Kenji_Run", "さっちゃん", "Taka@Sub3"]
+                self.membersInfo = ["あなた（オーナー）", "Kenji_Run", "さっちゃん", "Taka@Sub3", "Momo", "Runner123", "Yuki"]
             }
             return
         }
@@ -255,11 +255,11 @@ struct TeamDetailView: View {
                     "name": "皇居ランナーズ",
                     "inviteCode": "EX1234",
                     "requiresApproval": true,
-                    "members": ["u_owner", "u_kenji", "u_sacchan", "u_taka"]
+                    "members": ["u_owner", "u_kenji", "u_sacchan", "u_taka", "u_momo", "u_runner123", "u_yuki"]
                 ]
-                self.memberUIDs = ["u_owner", "u_kenji", "u_sacchan", "u_taka"]
+                self.memberUIDs = ["u_owner", "u_kenji", "u_sacchan", "u_taka", "u_momo", "u_runner123", "u_yuki"]
                 self.ownerUid = "u_owner"
-                self.membersInfo = ["Kenji_Run", "さっちゃん", "Taka@Sub3"]
+                self.membersInfo = ["Kenji_Run", "さっちゃん", "Taka@Sub3", "Momo", "Runner123", "Yuki"]
             }
             return
         }
