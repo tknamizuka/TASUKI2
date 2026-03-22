@@ -8,18 +8,15 @@
 import SwiftUI
 
 struct CoachView: View {
-    @State private var selectedCategory: String = "すべて"
+    @AppStorage("myName") private var myName: String = "Hiro"
     @State private var showQuestionSheet = false
-    @State private var qaItems: [QAItem] = mockQAItems
+    @State private var qaItems: [QAItem] = []
+    @ObservedObject private var activityStore = RunActivityStore.shared
+    @ObservedObject private var planStore = TrainingPlanStore.shared
     
-    private let categories = ["すべて", "トレーニング", "ケア", "食事", "ギア"]
-    
-    // フィルタリングされたQ&Aリスト
-    private var filteredQAItems: [QAItem] {
-        if selectedCategory == "すべて" {
-            return qaItems
-        }
-        return qaItems.filter { $0.category == selectedCategory }
+    // 自分の質問のみ表示
+    private var personalQAItems: [QAItem] {
+        qaItems.filter { $0.askerName == myName }
     }
     
     var body: some View {
@@ -33,52 +30,34 @@ struct CoachView: View {
                         // ヘッダー
                         headerView
                             .padding(.horizontal, 20)
-                            .padding(.top, 32)   // EKIDEN MODE と同程度の位置に調整
-                            .padding(.bottom, 12)
-
-                        NavigationLink(destination: CoachProgramView()) {
-                            HStack(spacing: 10) {
-                                Image(systemName: "book.pages.fill")
-                                    .font(.system(size: 18, weight: .semibold))
-                                    .foregroundColor(Color.tasukiAccent)
-                                    .frame(width: 28)
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text("COACH PROGRAM")
-                                        .font(.system(size: 13, weight: .bold))
-                                        .foregroundColor(Color.tasukiPrimary)
-                                    Text("目標別の実践プログラムを見る")
-                                        .font(.caption)
-                                        .foregroundColor(Color.tasukiMutedText)
-                                }
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(.caption)
-                                    .foregroundColor(Color.tasukiMutedText)
-                            }
-                            .padding(14)
-                            .background(
-                                RoundedRectangle(cornerRadius: 14)
-                                    .fill(Color.white)
-                                    .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 3)
-                            )
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 12)
-                        
-                        // カテゴリフィルタ
-                        categoryFilterView
-                            .padding(.horizontal, 20)
+                            .padding(.top, 32)
                             .padding(.bottom, 20)
                         
-                        // Q&Aリスト
-                        VStack(spacing: 16) {
-                            ForEach(filteredQAItems) { item in
-                                qaCardView(item: item)
+                        // A. コーチプログラム（インライン表示）
+                        coachProgramSection
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 24)
+                        
+                        // B. あなたの Q&A
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("あなたの Q&A")
+                                .font(.system(size: 18, weight: .bold))
+                                .foregroundColor(Color.tasukiPrimary)
+                                .padding(.horizontal, 20)
+                            
+                            if personalQAItems.isEmpty {
+                                emptyQAView
+                                    .padding(.horizontal, 20)
+                            } else {
+                                VStack(spacing: 16) {
+                                    ForEach(personalQAItems) { item in
+                                        qaCardView(item: item)
+                                    }
+                                }
+                                .padding(.horizontal, 20)
                             }
                         }
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 100)  // フローティングボタンのスペース
+                        .padding(.bottom, 100)
                     }
                 }
             }
@@ -108,7 +87,7 @@ struct CoachView: View {
                         let newItem = QAItem(
                             question: question,
                             answer: nil,
-                            askerName: "Hiro",  // 自分のニックネーム（AppStorageから取得する想定）
+                            askerName: myName,
                             coachName: nil,     // 回答待ち状態なのでnil
                             category: category,
                             postedDate: Date()
@@ -127,43 +106,117 @@ struct CoachView: View {
     // MARK: - Header View
     private var headerView: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Coach")
-                .font(.system(size: 34, weight: .bold)) // Find / EKIDEN MODE に揃えたタイトルサイズ
+            Text("\(myName)さんへのアドバイス")
+                .font(.system(size: 34, weight: .bold))
                 .foregroundColor(Color.tasukiPrimary)
             
-            Text("元箱根駅伝ランナーや実業団選手があなたの疑問に答えます")
+            Text("走行実績と目標に基づくコーチメッセージ · 実業団選手があなたの質問に回答")
                 .font(.system(size: 14, weight: .regular))
                 .foregroundColor(Color.tasukiMutedText)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
     
-    // MARK: - Category Filter View
-    private var categoryFilterView: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                ForEach(categories, id: \.self) { category in
-                    categoryButton(category: category)
+    // MARK: - Coach Program Section (inline)
+    private var coachProgramSection: some View {
+        VStack(spacing: 14) {
+            // 今週のコーチコメント
+            VStack(alignment: .leading, spacing: 8) {
+                Text("今週のコーチコメント")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(Color.tasukiPrimary)
+                Text(coachRecommendationText)
+                    .font(.system(size: 14))
+                    .foregroundColor(Color.tasukiMutedText)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(Color.tasukiDarkCard)
+                    .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 3)
+            )
+            
+            // 推奨モジュール
+            VStack(alignment: .leading, spacing: 8) {
+                Text("推奨モジュール")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(Color.tasukiPrimary)
+                ForEach(recommendedBlocks, id: \.self) { block in
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.seal.fill")
+                            .foregroundColor(Color.tasukiAccent)
+                        Text(block)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(Color.tasukiPrimary)
+                        Spacer()
+                    }
+                    .padding(.vertical, 4)
                 }
             }
-            .padding(.horizontal, 4)
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(Color.tasukiDarkCard)
+                    .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 3)
+            )
         }
     }
     
-    private func categoryButton(category: String) -> some View {
-        Button(action: {
-            selectedCategory = category
-        }) {
-            Text(category)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(selectedCategory == category ? .white : Color.tasukiMutedText)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(
-                    Capsule()
-                        .fill(selectedCategory == category ? Color.tasukiAccentOrange : Color.tasukiDarkCard)
-                )
+    private var coachRecommendationText: String {
+        let weeklyRuns = activityStore.weeklyRunCount()
+        switch weeklyRuns {
+        case 0:
+            return "まずは週2回から。短時間のEASY RUNを習慣化しましょう。"
+        case 1...2:
+            return "頻度は良い流れです。今週は1回だけ少し強度を上げるのがおすすめです。"
+        case 3...4:
+            return "十分な走行頻度です。疲労管理を優先しつつ、質を上げていきましょう。"
+        default:
+            return "高頻度で走れています。休養日を計画的に入れて故障予防を徹底しましょう。"
         }
+    }
+    
+    private var recommendedBlocks: [String] {
+        switch planStore.selectedTemplate {
+        case .finish:
+            return [
+                "フォーム基礎（接地と姿勢）",
+                "EASY RUNの呼吸管理",
+                "継続のための週間リズム設計"
+            ]
+        case .sub4:
+            return [
+                "テンポ走の強度調整",
+                "ロング走後半の失速対策",
+                "レース4週間前の調整戦略"
+            ]
+        case .sub3:
+            return [
+                "閾値走のペース精度向上",
+                "高強度週の疲労マネジメント",
+                "30km走の補給最適化"
+            ]
+        }
+    }
+    
+    // MARK: - Empty Q&A View
+    private var emptyQAView: some View {
+        VStack(spacing: 12) {
+            Text("まだ質問がありません")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundColor(Color.tasukiMutedText)
+            Text("＋ボタンから質問を投稿してみましょう")
+                .font(.system(size: 13))
+                .foregroundColor(Color.tasukiMutedText)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 32)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.tasukiDarkCard)
+        )
     }
     
     // MARK: - Q&A Card View

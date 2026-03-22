@@ -474,25 +474,6 @@ let mockPractices = [
     )
 ]
 
-let mockQAItems = [
-    QAItem(
-        question: "ラン後のストレッチはどのくらい時間をかけるべきですか？",
-        answer: "目安として10〜15分程度をおすすめします。特にハムストリングスとふくらはぎを重点的に伸ばしましょう。",
-        askerName: "Yuki",
-        coachName: "廣佳樹",
-        category: "ケア",
-        postedDate: Date().addingTimeInterval(-86400)
-    ),
-    QAItem(
-        question: "サブ4を目指す場合、週間距離はどのくらい必要ですか？",
-        answer: "一般的には週40〜50km程度が一つの目安になりますが、現在の走力や疲労度に合わせて調整してください。",
-        askerName: "Kenta",
-        coachName: "廣佳樹",
-        category: "トレーニング",
-        postedDate: Date().addingTimeInterval(-86400 * 3)
-    )
-]
-
 let mockPartnerUsers: [PartnerUser] = []
 
 let mockRecruitments: [PracticeRecruitment] = [
