@@ -182,7 +182,7 @@ struct HomeView: View {
                     NavigationLink(destination: CoachView()) {
                         quickActionCard(
                             title: "COACH",
-                            subtitle: "コーチ・プラン",
+                            subtitle: "あなたのパーソナルコーチ",
                             icon: "graduationcap.fill"
                         )
                     }

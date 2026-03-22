@@ -9,8 +9,8 @@ struct MainTabView: View {
     private let tabItems: [(icon: String, label: String)] = [
         ("house.fill", "Home"),
         ("figure.run", "Run"),
-        ("magnifyingglass", "Find"),
         ("person.3.fill", "EKIDEN"),
+        ("magnifyingglass", "Find"),
         ("person.fill", "Me")
     ]
     
@@ -25,9 +25,9 @@ struct MainTabView: View {
             case 1:
                 SoloRunHubView()
             case 2:
-                FindView()
-            case 3:
                 TeamView()
+            case 3:
+                FindView()
             case 4:
                 MyProfileView()
             default:
