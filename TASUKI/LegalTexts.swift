@@ -120,4 +120,9 @@ enum LegalTexts {
 
     本ポリシーは、必要に応じて改定することがあります。重要な変更がある場合はアプリ内でお知らせします。
     """
+
+    // MARK: - お問い合わせ
+
+    /// お問い合わせ用 mailto URL（運営メールアドレスに差し替えてください）
+    static let supportInquiryMailto = "mailto:support@example.com?subject=TASUKIお問い合わせ"
 }

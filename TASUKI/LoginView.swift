@@ -1,13 +1,28 @@
 import SwiftUI
 
+enum LoginSheetItem: Identifiable {
+    case menu
+    case terms
+    case privacy
+    var id: Int {
+        switch self {
+        case .menu: return 0
+        case .terms: return 1
+        case .privacy: return 2
+        }
+    }
+}
+
 struct LoginView: View {
     @EnvironmentObject var authManager: AuthManager
-    
+
     @State private var email: String = ""
     @State private var password: String = ""
     @State private var errorMessage: String = ""
     @State private var showError: Bool = false
-    
+    @State private var sheetItem: LoginSheetItem? = nil
+    @State private var showAccountInfoAlert: Bool = false
+
     var body: some View {
         ZStack {
             Color.white
@@ -98,11 +113,62 @@ struct LoginView: View {
                     .progressViewStyle(CircularProgressViewStyle())
             }
         }
+        .overlay(alignment: .topTrailing) {
+            Button {
+                sheetItem = .menu
+            } label: {
+                Image(systemName: "line.3.horizontal")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(Color.tasukiMutedText)
+                    .frame(width: 44, height: 44)
+                    .background(Circle().fill(Color.tasukiSurface))
+                    .shadow(color: Color.black.opacity(0.06), radius: 6, x: 0, y: 2)
+            }
+            .padding(.top, 8)
+            .padding(.trailing, 16)
+        }
+        .sheet(item: $sheetItem) { item in
+            switch item {
+            case .menu:
+                LoginMenuSheet(onSelect: { action in
+                    switch action {
+                    case .terms:
+                        sheetItem = .terms
+                    case .privacy:
+                        sheetItem = .privacy
+                    case .contact:
+                        openInquiryMailto()
+                    case .account:
+                        showAccountInfoAlert = true
+                    }
+                })
+                .presentationDetents([.height(340)])
+                .presentationBackground(.ultraThinMaterial)
+            case .terms:
+                TermsOfUseView()
+            case .privacy:
+                PrivacyPolicyView()
+            }
+        }
         .alert("エラー", isPresented: $showError) {
             Button("OK", role: .cancel) { }
         } message: {
             Text(errorMessage)
         }
+        .alert("アカウント管理", isPresented: $showAccountInfoAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("メールアドレス・パスワードの変更や退会は、ログイン後に Me タブのプロフィール編集から行えます。")
+        }
+    }
+
+    private func openInquiryMailto() {
+        guard let url = URL(string: LegalTexts.supportInquiryMailto) else {
+            errorMessage = "お問い合わせ用の設定がありません。"
+            showError = true
+            return
+        }
+        UIApplication.shared.open(url)
     }
     
     private func handleSignIn() {
