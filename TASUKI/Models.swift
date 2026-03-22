@@ -279,6 +279,26 @@ struct QAItem: Identifiable {
     let postedDate: Date       // 投稿日時
 }
 
+/// CoachView 用サンプル（旧 mockQAItems と同一の質問・回答）。質問者は `myName` デフォルト「Hiro」、回答者は「廣 佳樹」（CoachProfileView と一致）
+let coachPersonalSampleQAItems: [QAItem] = [
+    QAItem(
+        question: "ラン後のストレッチはどのくらい時間をかけるべきですか？",
+        answer: "目安として10〜15分程度をおすすめします。特にハムストリングスとふくらはぎを重点的に伸ばしましょう。",
+        askerName: "Hiro",
+        coachName: "廣 佳樹",
+        category: "ケア",
+        postedDate: Date().addingTimeInterval(-86400)
+    ),
+    QAItem(
+        question: "サブ4を目指す場合、週間距離はどのくらい必要ですか？",
+        answer: "一般的には週40〜50km程度が一つの目安になりますが、現在の走力や疲労度に合わせて調整してください。",
+        askerName: "Hiro",
+        coachName: "廣 佳樹",
+        category: "トレーニング",
+        postedDate: Date().addingTimeInterval(-86400 * 3)
+    )
+]
+
 struct PracticeRecruitment: Identifiable {
     /// 募集の一意ID（新規作成時に発行。練習の日時・場所データもこのIDに紐づく）
     let practiceId: String

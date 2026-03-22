@@ -17,7 +17,7 @@ struct LegAssignmentRow: Identifiable {
 }
 
 struct EkidenLegAssignmentView: View {
-    private let maxTeamMembers = 7
+    private let maxTeamMembers = 10
     let teamId: String
 
     @State private var memberUIDs: [String] = []

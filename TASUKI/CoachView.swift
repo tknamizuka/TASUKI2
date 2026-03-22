@@ -10,12 +10,11 @@ import SwiftUI
 struct CoachView: View {
     @AppStorage("myName") private var myName: String = "Hiro"
     @State private var showQuestionSheet = false
+    /// ユーザーが投稿した質問のみ（サンプルは含めない）
     @State private var qaItems: [QAItem] = []
     @ObservedObject private var activityStore = RunActivityStore.shared
-    @ObservedObject private var planStore = TrainingPlanStore.shared
     
-    // 自分の質問のみ表示
-    private var personalQAItems: [QAItem] {
+    private var userQAItems: [QAItem] {
         qaItems.filter { $0.askerName == myName }
     }
     
@@ -38,23 +37,44 @@ struct CoachView: View {
                             .padding(.horizontal, 20)
                             .padding(.bottom, 24)
                         
-                        // B. あなたの Q&A
+                        // B. あなたの Q&A（サンプル＋自分の質問）
                         VStack(alignment: .leading, spacing: 12) {
                             Text("あなたの Q&A")
                                 .font(.system(size: 18, weight: .bold))
                                 .foregroundColor(Color.tasukiPrimary)
                                 .padding(.horizontal, 20)
                             
-                            if personalQAItems.isEmpty {
-                                emptyQAView
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("サンプル")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(Color.tasukiMutedText)
                                     .padding(.horizontal, 20)
-                            } else {
                                 VStack(spacing: 16) {
-                                    ForEach(personalQAItems) { item in
-                                        qaCardView(item: item)
+                                    ForEach(coachPersonalSampleQAItems) { item in
+                                        qaCardView(item: item, isSample: true)
                                     }
                                 }
                                 .padding(.horizontal, 20)
+                            }
+                            
+                            if !userQAItems.isEmpty {
+                                Text("あなたの質問")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(Color.tasukiMutedText)
+                                    .padding(.horizontal, 20)
+                                    .padding(.top, 8)
+                                VStack(spacing: 16) {
+                                    ForEach(userQAItems) { item in
+                                        qaCardView(item: item, isSample: false)
+                                    }
+                                }
+                                .padding(.horizontal, 20)
+                            } else {
+                                Text("＋ボタンから、コーチへの質問を投稿できます")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(Color.tasukiMutedText)
+                                    .padding(.horizontal, 20)
+                                    .padding(.top, 8)
                             }
                         }
                         .padding(.bottom, 100)
@@ -78,7 +98,8 @@ struct CoachView: View {
                         )
                 }
                 .padding(.trailing, 20)
-                .padding(.bottom, 20)
+                // メインタブのカスタムタブバーと重ならないよう余白を確保
+                .padding(.bottom, 88)
             }
             .sheet(isPresented: $showQuestionSheet) {
                 QuestionPostSheet(
@@ -136,31 +157,6 @@ struct CoachView: View {
                     .fill(Color.tasukiDarkCard)
                     .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 3)
             )
-            
-            // 推奨モジュール
-            VStack(alignment: .leading, spacing: 8) {
-                Text("推奨モジュール")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(Color.tasukiPrimary)
-                ForEach(recommendedBlocks, id: \.self) { block in
-                    HStack(spacing: 8) {
-                        Image(systemName: "checkmark.seal.fill")
-                            .foregroundColor(Color.tasukiAccent)
-                        Text(block)
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(Color.tasukiPrimary)
-                        Spacer()
-                    }
-                    .padding(.vertical, 4)
-                }
-            }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(Color.tasukiDarkCard)
-                    .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 3)
-            )
         }
     }
     
@@ -178,49 +174,8 @@ struct CoachView: View {
         }
     }
     
-    private var recommendedBlocks: [String] {
-        switch planStore.selectedTemplate {
-        case .finish:
-            return [
-                "フォーム基礎（接地と姿勢）",
-                "EASY RUNの呼吸管理",
-                "継続のための週間リズム設計"
-            ]
-        case .sub4:
-            return [
-                "テンポ走の強度調整",
-                "ロング走後半の失速対策",
-                "レース4週間前の調整戦略"
-            ]
-        case .sub3:
-            return [
-                "閾値走のペース精度向上",
-                "高強度週の疲労マネジメント",
-                "30km走の補給最適化"
-            ]
-        }
-    }
-    
-    // MARK: - Empty Q&A View
-    private var emptyQAView: some View {
-        VStack(spacing: 12) {
-            Text("まだ質問がありません")
-                .font(.system(size: 15, weight: .medium))
-                .foregroundColor(Color.tasukiMutedText)
-            Text("＋ボタンから質問を投稿してみましょう")
-                .font(.system(size: 13))
-                .foregroundColor(Color.tasukiMutedText)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 32)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color.tasukiDarkCard)
-        )
-    }
-    
     // MARK: - Q&A Card View
-    private func qaCardView(item: QAItem) -> some View {
+    private func qaCardView(item: QAItem, isSample: Bool) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             // カテゴリと投稿日
             HStack {
@@ -233,9 +188,18 @@ struct CoachView: View {
                         Capsule()
                             .fill(Color.tasukiAccentOrange)
                     )
-                
+                if isSample {
+                    Text("サンプル")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(Color.tasukiMutedText)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule()
+                                .fill(Color.tasukiDarkCardSecondary)
+                        )
+                }
                 Spacer()
-                
                 Text(formatDate(item.postedDate))
                     .font(.system(size: 12, weight: .regular))
                     .foregroundColor(Color.tasukiMutedText)
@@ -253,12 +217,12 @@ struct CoachView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             
-            // 質問者
+            // 質問者（サンプルは「あなた」として現在の表示名を使用）
             HStack(spacing: 4) {
                 Text("質問者:")
                     .font(.system(size: 12, weight: .regular))
                     .foregroundColor(Color.tasukiMutedText)
-                Text(item.askerName)
+                Text(isSample ? myName : item.askerName)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(Color.tasukiPrimary)
             }

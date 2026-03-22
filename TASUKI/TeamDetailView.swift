@@ -3,7 +3,7 @@ import FirebaseAuth
 import FirebaseFirestore
 
 struct TeamDetailView: View {
-    private let maxTeamMembers = 7
+    private let maxTeamMembers = 10
     let teamId: String
     var onJoined: ((String?) -> Void)? = nil   // 呼び出し元へ参加結果を返す
 

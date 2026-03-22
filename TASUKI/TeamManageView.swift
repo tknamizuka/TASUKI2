@@ -3,7 +3,7 @@ import FirebaseFirestore
 import FirebaseAuth
 
 struct TeamManageView: View {
-    private let maxTeamMembers = 7
+    private let maxTeamMembers = 10
     let teamId: String
     @State private var requests: [JoinRequest] = []
     @State private var isLoading: Bool = false

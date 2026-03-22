@@ -3,7 +3,7 @@ import FirebaseAuth
 import FirebaseFirestore
 
 struct TeamJoinCreateView: View {
-    private let maxTeamMembers = 7
+    private let maxTeamMembers = 10
     var onComplete: ((String?) -> Void)? = nil
     var useMockFlow: Bool = false
     

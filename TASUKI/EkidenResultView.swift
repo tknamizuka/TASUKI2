@@ -86,10 +86,10 @@ struct EkidenResultView: View {
         if let sec = leg.elapsedSeconds {
             timeStr = EkidenViewState.formatElapsed(leg.status == .submitted ?
                 (leg.splitAtTargetSeconds ?? sec) : sec)
-            badge = leg.isUnderTarget ? "未達" : nil
+            badge = nil
         } else {
             timeStr = "—"
-            badge = leg.status == .ready ? "提出可能" : (leg.status == .awaitingTasuki ? "襷待ち" : nil)
+            badge = leg.status == .ready ? "提出可能" : (leg.status == .awaitingTasuki ? "TASUKI待ち" : nil)
         }
         return HStack(spacing: 12) {
             Text("\(leg.id + 1)区")
@@ -109,10 +109,8 @@ struct EkidenResultView: View {
                     .font(.system(size: 10, weight: .semibold))
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(RoundedRectangle(cornerRadius: 4).fill(
-                        b == "未達" ? Color.tasukiAccentOrange.opacity(0.3) : Color.tasukiMutedText.opacity(0.3)
-                    ))
-                    .foregroundColor(b == "未達" ? Color.tasukiAccentOrange : Color.tasukiMutedText)
+                    .background(RoundedRectangle(cornerRadius: 4).fill(Color.tasukiMutedText.opacity(0.3)))
+                    .foregroundColor(Color.tasukiMutedText)
             }
         }
         .padding(.vertical, 10)

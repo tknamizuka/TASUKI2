@@ -30,7 +30,7 @@ struct TeamChatMessage: Identifiable {
 
 // MARK: - Team View
 struct TeamView: View {
-    private let maxTeamMembers = 7
+    private let maxTeamMembers = 10
     var useMockTeamFlow: Bool = false
     @State private var userTeamId: String? = nil
     @State private var selectedTeamId: String = ""
@@ -59,6 +59,9 @@ struct TeamView: View {
     @State private var showEkidenResultView = false
     @State private var selectedLegForSubstitute: (leg: EkidenLeg, state: EkidenViewState)? = nil
     @State private var showEkidenSubstituteSheet = false
+    @State private var showPassTasukiConfirm = false
+    @State private var passTasukiLegIndex: Int? = nil
+    @State private var isPassingTasuki = false
     
     // チーム情報
     @State private var teamName: String = "皇居ランナーズ"
@@ -323,6 +326,16 @@ struct TeamView: View {
                         ekidenViewState = nil
                     }
                 }
+                .alert("TASUKIをつなぐ", isPresented: $showPassTasukiConfirm) {
+                    Button("キャンセル", role: .cancel) {
+                        passTasukiLegIndex = nil
+                    }
+                    Button("つなぐ", role: .none) {
+                        performPassTasuki()
+                    }
+                } message: {
+                    Text("走らずにTASUKIだけ次の担当へ渡します。距離は加算されません。")
+                }
             }
         }
         .onAppear {
@@ -355,6 +368,47 @@ struct TeamView: View {
         let state = await EkidenDataService.shared.loadEkidenState(teamId: teamId, isSampleTeam: isSample)
         await MainActor.run {
             ekidenViewState = state
+        }
+    }
+    
+    /// TASUKIをつなぐ（TASUKIだけ次へ、距離加算なし）
+    private func performPassTasuki() {
+        guard let legIndex = passTasukiLegIndex,
+              let state = ekidenViewState else {
+            showPassTasukiConfirm = false
+            passTasukiLegIndex = nil
+            return
+        }
+        let leg = state.legs.first { $0.id == legIndex }
+        let submittedByUid: String? = isSampleTeamFlow
+            ? leg?.assignedUid
+            : Auth.auth().currentUser?.uid
+        guard let uid = submittedByUid else {
+            showPassTasukiConfirm = false
+            passTasukiLegIndex = nil
+            return
+        }
+        let teamId = selectedTeamId
+        let entryId = state.entry.id
+        let isSample = isSampleTeamFlow || teamId.hasPrefix("example")
+        showPassTasukiConfirm = false
+        passTasukiLegIndex = nil
+        isPassingTasuki = true
+        Task {
+            let result = await EkidenDataService.shared.passTasuki(
+                teamId: teamId,
+                entryId: entryId,
+                legIndex: legIndex,
+                totalLegCount: state.event.legCount,
+                submittedByUid: uid,
+                isSampleTeam: isSample
+            )
+            await MainActor.run {
+                isPassingTasuki = false
+                if case .success = result {
+                    Task { await loadEkidenState(teamId: teamId) }
+                }
+            }
         }
     }
     
@@ -393,7 +447,15 @@ struct TeamView: View {
         let endStr = dateFormatter.string(from: state.event.endAt)
         
         let currentLegIndex = state.entry.currentLegIndex
-        let legProgress = state.event.legCount > 0 ? Double(state.submittedLegCount) / Double(state.event.legCount) * 100 : 0
+        let legProgress: Double
+        let progressCaption: String
+        if state.isCumulativeMode {
+            legProgress = state.teamGoalKm > 0 ? min(1.0, state.cumulativeDistanceKm / state.teamGoalKm) * 100 : 0
+            progressCaption = String(format: "チーム累計 %.1f / %.0f km", state.cumulativeDistanceKm, state.teamGoalKm)
+        } else {
+            legProgress = state.event.legCount > 0 ? Double(state.submittedLegCount) / Double(state.event.legCount) * 100 : 0
+            progressCaption = "\(state.submittedLegCount)/\(state.event.legCount) 区間"
+        }
         
         return VStack(spacing: 16) {
             HStack(spacing: 8) {
@@ -474,6 +536,10 @@ struct TeamView: View {
             }
             .frame(height: 20)
             
+            Text(progressCaption)
+                .font(.system(size: 12))
+                .foregroundColor(Color.tasukiMutedText)
+            
             HStack(spacing: 8) {
                 ForEach(0..<state.event.legCount, id: \.self) { i in
                     let leg = state.legs.first { $0.id == i }
@@ -490,13 +556,13 @@ struct TeamView: View {
                 }
             }
             
-            // 襷受け渡し
+            // TASUKI受け渡し
             if let name = state.nextRunnerName(), state.legs.contains(where: { $0.status == .ready }) {
                 HStack(spacing: 6) {
                     Image(systemName: "figure.run")
                         .font(.system(size: 14))
                         .foregroundColor(Color.tasukiAccentOrange)
-                    Text("襷を受け取り: \(name)")
+                    Text("TASUKI:\(name)")
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(Color.tasukiPrimary)
                     Text("（提出可能）")
@@ -594,6 +660,10 @@ struct TeamView: View {
                         onTapSubstitute: {
                             selectedLegForSubstitute = (leg: leg, state: state)
                             showEkidenSubstituteSheet = true
+                        },
+                        onTapPassTasuki: {
+                            passTasukiLegIndex = leg.id
+                            showPassTasukiConfirm = true
                         }
                     )
                 }
@@ -625,7 +695,7 @@ struct TeamView: View {
         )
     }
     
-    private func ekidenLegRowView(leg: EkidenLeg, state: EkidenViewState, teamId: String, isSampleTeam: Bool, allowSubmit: Bool = true, isTeamOwner: Bool = false, onTapSubmit: @escaping () -> Void, onTapSubstitute: @escaping () -> Void = {}) -> some View {
+    private func ekidenLegRowView(leg: EkidenLeg, state: EkidenViewState, teamId: String, isSampleTeam: Bool, allowSubmit: Bool = true, isTeamOwner: Bool = false, onTapSubmit: @escaping () -> Void, onTapSubstitute: @escaping () -> Void = {}, onTapPassTasuki: (() -> Void)? = nil) -> some View {
         let name = leg.assignedUid.flatMap { state.memberNames[$0] } ?? "未割当"
         let statusText: String
         let statusColor: Color
@@ -633,15 +703,15 @@ struct TeamView: View {
         switch leg.status {
         case .submitted:
             let timeStr = leg.elapsedSeconds.map { EkidenViewState.formatElapsed($0) } ?? "—"
-            statusText = leg.isUnderTarget ? "未達 \(timeStr)" : timeStr
-            statusColor = leg.isUnderTarget ? Color.tasukiMutedText : Color(hex: "34C759")
+            statusText = timeStr
+            statusColor = Color(hex: "34C759")
             icon = "checkmark.circle.fill"
         case .ready:
             statusText = "提出可能"
             statusColor = Color.tasukiAccentOrange
             icon = "figure.run"
         case .awaitingTasuki:
-            statusText = "襷待ち"
+            statusText = "TASUKI待ち"
             statusColor = Color.tasukiMutedText
             icon = "clock"
         }
@@ -690,8 +760,22 @@ struct TeamView: View {
                         .padding(.vertical, 8)
                     }
                     .buttonStyle(.plain)
+                    if let onPass = onTapPassTasuki {
+                        Button(action: onPass) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "arrow.right.circle")
+                                Text("TASUKIをつなぐ")
+                                    .font(.system(size: 13, weight: .semibold))
+                            }
+                            .foregroundColor(Color.tasukiMutedText)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .background(RoundedRectangle(cornerRadius: 8).fill(Color.tasukiDarkCardSecondary))
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
-                // オーナー: 代走設定（襷待ち・提出可能の区間のみ）
+                // オーナー: 代走設定（TASUKI待ち・提出可能の区間のみ）
                 if isTeamOwner && allowSubmit && (leg.status == .ready || leg.status == .awaitingTasuki) {
                     Button(action: onTapSubstitute) {
                         HStack(spacing: 4) {

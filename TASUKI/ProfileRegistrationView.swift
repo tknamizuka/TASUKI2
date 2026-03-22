@@ -32,9 +32,10 @@ struct ProfileRegistrationView: View {
     // ステップ管理
     @State private var currentStep: Int = 0
     
-    // 利用規約同意
+    // 利用規約・プライバシーポリシー同意
     @State private var termsAgreed: Bool = false
-    @State private var showTermsDetail: Bool = false
+    @State private var privacyPolicyAgreed: Bool = false
+    @State private var showPrivacyPolicy: Bool = false
     
     // 保存状態
     @State private var isSaving: Bool = false
@@ -185,7 +186,7 @@ struct ProfileRegistrationView: View {
     private var isCurrentStepValid: Bool {
         switch currentStep {
         case 0:
-            return termsAgreed // 規約に同意しているかどうか
+            return termsAgreed && privacyPolicyAgreed
         case 1:
             return profileImage != nil // プロフィール写真が必須
         case 2:
@@ -240,8 +241,8 @@ struct ProfileRegistrationView: View {
         VStack(spacing: 24) {
             switch currentStep {
             case 0:
-                // 規約同意画面
-                termsOfServiceView
+                // 規約・プライバシー同意画面
+                termsAndPrivacyView
             case 1:
                 questionTitle("プロフィール写真を選択してください")
                 profilePhotoPicker
@@ -426,115 +427,81 @@ struct ProfileRegistrationView: View {
         }
     }
     
-    private var termsOfServiceView: some View {
+    private var termsAndPrivacyView: some View {
         VStack(spacing: 20) {
             VStack(spacing: 12) {
                 Text("TASUKI（タスキ）利用規約")
                     .font(.system(size: 18, weight: .bold))
                     .foregroundColor(Color(hex: "0F1A2E"))
-                
-                // 規約内容を表示
+
                 ScrollView {
-                    Text(termsOfServiceText)
+                    Text(LegalTexts.termsOfServiceText)
                         .font(.system(size: 12, weight: .regular))
                         .foregroundColor(.gray)
                         .lineSpacing(4)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(height: 220)
+                .frame(height: 140)
                 .padding(.vertical, 12)
                 .padding(.horizontal, 12)
                 .background(Color.gray.opacity(0.05))
                 .cornerRadius(8)
             }
-            
-            // チェックボックスと同意テキスト
-            HStack(spacing: 12) {
-                Image(systemName: termsAgreed ? "checkmark.square.fill" : "square")
-                    .font(.system(size: 20))
-                    .foregroundColor(termsAgreed ? Color(hex: "0F1A2E") : .gray)
-                    .onTapGesture {
-                        termsAgreed.toggle()
+
+            // 利用規約同意
+            agreementRow(
+                agreed: $termsAgreed,
+                title: "TASUKI利用規約に同意する"
+            )
+
+            // プライバシーポリシー同意
+            VStack(alignment: .leading, spacing: 8) {
+                agreementRow(
+                    agreed: $privacyPolicyAgreed,
+                    title: "プライバシーポリシーに同意する"
+                )
+                Button {
+                    showPrivacyPolicy = true
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "doc.text")
+                        Text("プライバシーポリシーを読む")
+                            .font(.footnote)
                     }
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("TASUKI利用規約に同意する")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(Color(hex: "0F1A2E"))
+                    .foregroundColor(Color(hex: "2E5CFF"))
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .onTapGesture {
-                    termsAgreed.toggle()
-                }
-                
-                Spacer()
             }
             .padding(12)
             .background(Color.gray.opacity(0.05))
             .cornerRadius(8)
         }
+        .sheet(isPresented: $showPrivacyPolicy) {
+            PrivacyPolicyView()
+        }
     }
-    
-    private var termsOfServiceText: String {
-        """
-        TASUKI（タスキ）利用規約
 
-        この規約（以下「本規約」といいます）は、TASUKIプロジェクト（以下「当社」といいます）が提供するランニングアプリ「TASUKI」（以下「本サービス」といいます）の利用条件を定めるものです。利用者の皆様（以下「ユーザー」といいます）には、本規約に従って本サービスをご利用いただきます。
+    private func agreementRow(agreed: Binding<Bool>, title: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: agreed.wrappedValue ? "checkmark.square.fill" : "square")
+                .font(.system(size: 20))
+                .foregroundColor(agreed.wrappedValue ? Color(hex: "0F1A2E") : .gray)
+                .onTapGesture {
+                    agreed.wrappedValue.toggle()
+                }
 
-        第1条（規約への同意）
-        ユーザーは、本規約に同意した上で、本サービスを利用するものとします。
-        ユーザーが本アプリをダウンロードし、会員登録を完了した時点で、本規約を内容とする利用契約が成立したものとみなします。
-        本サービスは、18歳以上（高校生を除く）の方を対象としており、18歳未満の方の利用を禁止します。
+            Text(title)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(Color(hex: "0F1A2E"))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .onTapGesture {
+                    agreed.wrappedValue.toggle()
+                }
 
-        第2条（定義）
-        本規約において、次の用語は以下の意味を有します。
-        「コンテンツ」：本サービスを通じて投稿、アップロードされたテキスト、画像、ランニングログ、音声等の一切の情報。
-        「ランニングデータ」：GPSを利用して記録された走行距離、時間、ルート、ペース等のデータ。
-        「TASUKIポイント」：アプリ内のイベントや走行によって付与される、サービス内専用のスコア。
-        「襷（たすき）システム」：ユーザー間でパートナーを組み、継続を支援し合う本サービス独自の機能。
-
-        第3条（利用資格および自己責任）
-        本サービスは、18歳以上（高校生を除く）で、健康状態に問題がなく、激しい運動を行うことに支障がない方を対象としています。
-        ユーザーは、自身の健康状態を適切に管理し、無理のない範囲でランニングを行うものとします。
-        本サービスを利用したランニング中に発生した交通事故、怪我、体調悪化、その他のトラブルについて、当社は当社の過失による場合を除き、一切の責任を負いません。
-        GPS機能の利用により、自宅付近などの位置情報が他者に推測される可能性があることを理解し、プライバシー設定をユーザー自身の責任で行うものとします。
-
-        第4条（禁止事項）
-        ユーザーは、本サービスの利用にあたり、以下の行為を行ってはなりません。
-        法令、公序良俗、または本規約に違反する行為。
-        18歳未満（高校生を含む）が会員登録または本サービスを利用する行為。
-        自転者、自動車、その他交通機関を利用してランニングデータを偽装する行為。
-        走行中、または交通の頻繁な場所でのスマートフォン操作、および周囲の安全を阻害する形での利用。
-        本サービスを本来の目的（ランニングを通じた健康増進・交流）以外の目的（性的な出会い目的、宗教勧誘、営業活動等）で利用する行為。
-        他のユーザーに対する誹謗中傷、ストーカー行為、ハラスメント行為。
-        走行禁止エリアや私有地への無断立ち入り。
-        反社会的勢力への利益供与。
-
-        第5条（有料サービスおよび料金）
-        本サービスは一部有料のサブスクリプションプラン（以下「有料プラン」といいます）を提供します。
-        有料プランの料金、期間、特典の内容は、アプリ内の購入画面に準じます。
-        有料プランは、ユーザーが自ら解約手続きを行わない限り、同一条件で自動更新されます。
-        Apple IDやGoogle Play等の外部決済サービスを利用している場合、解約は各プラットフォームの定めに従ってユーザー自身が行う必要があります。
-
-        第6条（返金規定）
-        購入済みの有料プラン料金、およびポイントについては、原則として返金を行いません。
-
-        第7条（利用制限および強制退会）
-        当社は、ユーザーが本規約の禁止事項に違反した場合、事前の通知なくデータの削除、利用停止、または強制退会処分を行うことができます。
-
-        第8条（免責事項）
-        当社は、本サービスの内容の正確性、有用性、および特定の目的への適合性について保証しません。
-
-        第9条（権利帰属）
-        本サービスに関する知的財産権は、すべて当社または権利者に帰属します。
-
-        第10条（規約の変更）
-        当社は、必要と判断した場合、ユーザーへの事前告知を行うことで、いつでも本規約を変更できるものとします。
-
-        第11条（準拠法および裁判管轄）
-        本規約の解釈にあたっては、日本法を準拠法とします。
-        本サービスに関して紛争が生じた場合には、東京地方裁判所を第一審の専属的合意管轄裁判所とします。
-        """
+            Spacer()
+        }
+        .padding(12)
+        .background(Color.gray.opacity(0.05))
+        .cornerRadius(8)
     }
     
     private func questionTitle(_ text: String) -> some View {

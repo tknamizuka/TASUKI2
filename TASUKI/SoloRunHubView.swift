@@ -16,7 +16,7 @@ struct SoloRunHubView: View {
 
                 ScrollView {
                     VStack(spacing: 16) {
-                        Text("一人で走るモード")
+                        Text("Solo Run Mode")
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(Color.tasukiMutedText)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -44,7 +44,7 @@ struct SoloRunHubView: View {
                     .padding(.bottom, 80)
                 }
             }
-            .navigationTitle("一人で走る")
+            .navigationTitle("Solo Running Mode")
             .navigationBarTitleDisplayMode(.inline)
         }
     }

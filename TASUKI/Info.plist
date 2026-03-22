@@ -17,15 +17,15 @@
     <key>CFBundleVersion</key>
     <string>1</string>
 
-    <!-- Privacy: Location for run tracking during race -->
+    <!-- Privacy: Location for run tracking (規約・プライバシーポリシーと整合) -->
     <key>NSLocationWhenInUseUsageDescription</key>
-    <string>ランニング計測と行動パターン分析の精度向上のために位置情報を使用します。</string>
+    <string>ランニングの距離・ルート計測、およびチーム・駅伝機能での走行記録共有のために位置情報を使用します。</string>
 
-    <!-- Privacy: HealthKit usage descriptions -->
+    <!-- Privacy: HealthKit usage descriptions (規約・プライバシーポリシーと整合) -->
     <key>NSHealthShareUsageDescription</key>
-    <string>走行距離やワークアウト履歴を分析し、行動パターン推定の精度を向上するためにHealthデータを読み取ります。</string>
+    <string>走行距離、ワークアウト履歴、ルートデータを読み取り、アプリ内の走行記録表示およびバーチャル駅伝の提出に利用します。</string>
     <key>NSHealthUpdateUsageDescription</key>
-    <string>ワークアウト連携と分析結果の更新のためにHealthデータへのアクセスを使用します。</string>
+    <string>ワークアウト連携と走行記録の更新のために、Healthデータへの書き込みアクセスを使用します。</string>
 
 </dict>
 </plist>

@@ -2,7 +2,7 @@
 //  EkidenModels.swift
 //  TASUKI
 //
-//  バーチャル駅伝: イベント・エントリー・区間・襷状態・提出の Firestore モデル
+//  バーチャル駅伝: イベント・エントリー・区間・TASUKI状態・提出の Firestore モデル
 //
 
 import Foundation
@@ -33,12 +33,12 @@ enum EkidenEventStatus: String, Codable {
     case finished = "finished"     // 終了
 }
 
-// MARK: - Ekiden Leg Status（襷リレー状態）
+// MARK: - Ekiden Leg Status（TASUKIリレー状態）
 
-/// 区間の襷状態: 未開始 → 前区間完了待ち → 襷渡し済み・提出可能 → 提出済み
+/// 区間のTASUKI状態: 未開始 → 前区間完了待ち → TASUKI渡し済み・提出可能 → 提出済み
 enum EkidenLegStatus: String, Codable {
-    case awaitingTasuki = "awaitingTasuki"   // 前区間の襷待ち
-    case ready = "ready"                     // 襷渡し済み・提出可能
+    case awaitingTasuki = "awaitingTasuki"   // 前区間のTASUKI待ち（Firestoreキー互換）
+    case ready = "ready"                     // TASUKI渡し済み・提出可能
     case submitted = "submitted"             // 提出済み
 }
 
@@ -55,6 +55,8 @@ struct EkidenEvent: Identifiable {
     let status: EkidenEventStatus
     let rulesText: String?
     let createdAt: Date
+    /// チーム全体の目標距離（km）。累計モード用。未設定なら区間ベースUIにフォールバック
+    let teamGoalKm: Double?
     
     /// イベント期間内であるか
     var isWithinEventWindow: Bool {
@@ -77,7 +79,7 @@ struct EkidenLegDefinition: Identifiable {
 
 // MARK: - EkidenEntry（Firestore: ekiden_entries/{entryId}）
 
-/// チームの駅伝エントリー: チーム・イベント・オーナー・襷状態
+/// チームの駅伝エントリー: チーム・イベント・オーナー・TASUKI状態
 struct EkidenEntry: Identifiable {
     let id: String
     let teamId: String
@@ -85,7 +87,7 @@ struct EkidenEntry: Identifiable {
     let ownerUid: String
     /// 現在進行中の区間インデックス（0-indexed）
     var currentLegIndex: Int
-    /// 襷の状態（オプションでCloud Functionsが管理）
+    /// TASUKIの状態（オプションでCloud Functionsが管理）
     var tasukiState: String?
     let createdAt: Date
     let updatedAt: Date
@@ -93,7 +95,7 @@ struct EkidenEntry: Identifiable {
 
 // MARK: - EkidenLeg（Firestore: ekiden_entries/{entryId}/legs/{legIndex}）
 
-/// エントリー内の区間: 担当者・目標距離・襷状態・提出結果
+/// エントリー内の区間: 担当者・目標距離・TASUKI状態・提出結果
 struct EkidenLeg: Identifiable {
     let id: Int  // legIndex（0=1区）
     let assignedUid: String?
@@ -106,10 +108,12 @@ struct EkidenLeg: Identifiable {
     var isUnderTarget: Bool
     /// 目標距離超過時に、目標距離到達時点の通過タイム（秒）。超過時のみ
     var splitAtTargetSeconds: Double?
+    /// パス（走らずTASUKIだけ次へ）の場合は true。累計距離に加算しない
+    var isPass: Bool
     
     var isSubmitted: Bool { status == .submitted }
     
-    /// 襷が渡っていて提出可能か
+    /// TASUKIが渡っていて提出可能か
     var canSubmit: Bool { status == .ready }
 }
 
@@ -152,6 +156,7 @@ extension EkidenEvent {
         let statusRaw = data["status"] as? String ?? EkidenEventStatus.scheduled.rawValue
         let status = EkidenEventStatus(rawValue: statusRaw) ?? .scheduled
         let createdAt = (data["createdAt"] as? Timestamp)?.dateValue() ?? Date()
+        let teamGoalKm = data["teamGoalKm"] as? Double
         return EkidenEvent(
             id: id,
             startAt: startTs.dateValue(),
@@ -160,7 +165,8 @@ extension EkidenEvent {
             legs: legs.isEmpty ? (0..<max(1, legCount)).map { EkidenLegDefinition(id: $0, targetKm: 5.0, order: $0 + 1) } : legs,
             status: status,
             rulesText: data["rulesText"] as? String,
-            createdAt: createdAt
+            createdAt: createdAt,
+            teamGoalKm: teamGoalKm
         )
     }
 }
@@ -198,6 +204,7 @@ extension EkidenLeg {
         let elapsedSeconds = data["elapsedSeconds"] as? Double
         let isUnderTarget = data["isUnderTarget"] as? Bool ?? false
         let splitAtTargetSeconds = data["splitAtTargetSeconds"] as? Double
+        let isPass = data["isPass"] as? Bool ?? false
         return EkidenLeg(
             id: legIndex,
             assignedUid: data["assignedUid"] as? String,
@@ -207,7 +214,8 @@ extension EkidenLeg {
             actualDistanceKm: actualDistanceKm,
             elapsedSeconds: elapsedSeconds,
             isUnderTarget: isUnderTarget,
-            splitAtTargetSeconds: splitAtTargetSeconds
+            splitAtTargetSeconds: splitAtTargetSeconds,
+            isPass: isPass
         )
     }
 }

@@ -453,7 +453,7 @@ const EKIDEN_LEG_STATUS = {
 };
 
 /**
- * 駅伝区間提出（Callable）: 期間内・担当者・襷状態・重複防止を検証してから書き込み
+ * 駅伝区間提出（Callable）: 期間内・担当者・TASUKI状態・重複防止を検証してから書き込み
  */
 exports.submitEkidenLeg = onCall(
     {
@@ -516,7 +516,7 @@ exports.submitEkidenLeg = onCall(
         throw new HttpsError("failed-precondition", "既に提出済みです（重複提出防止）");
       }
       if (legData.status !== EKIDEN_LEG_STATUS.READY) {
-        throw new HttpsError("failed-precondition", "襷が渡っていません。前区間の提出を待ってください");
+        throw new HttpsError("failed-precondition", "TASUKIが渡っていません。前区間の提出を待ってください");
       }
       const assignedUid = legData.assignedUid;
       if (assignedUid && assignedUid !== uid) {
@@ -558,9 +558,10 @@ exports.submitEkidenLeg = onCall(
         }
 
         const nextIndex = legIndex + 1;
-        const tasukiState = nextIndex < 10 ? "ready" : "finished";
+        const totalLegCount = Math.max(Number(eventData.legCount || 0), 1);
+        const tasukiState = nextIndex < totalLegCount ? "ready" : "finished";
         tx.update(entryRef, {
-          currentLegIndex: nextIndex,
+          currentLegIndex: Math.min(nextIndex, totalLegCount - 1),
           tasukiState,
           updatedAt: ts,
         });

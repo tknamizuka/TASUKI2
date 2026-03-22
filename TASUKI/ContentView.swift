@@ -50,9 +50,9 @@ struct ContentView: View {
     // MARK: - Header
     private var headerView: some View {
         HStack {
-            // ロゴ（襷リレー背景画像 + TASUKIテキスト）
+            // ロゴ（TASUKIリレー背景画像 + TASUKIテキスト）
             ZStack {
-                // 襷リレー背景画像（透過）
+                // TASUKIリレー背景画像（透過）
                 Image("runner")
                     .renderingMode(.template)
                     .resizable()

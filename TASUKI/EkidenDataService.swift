@@ -50,7 +50,8 @@ final class MockEkidenStateHolder {
             actualDistanceKm: actualDistanceKm,
             elapsedSeconds: elapsedSeconds,
             isUnderTarget: isUnderTarget,
-            splitAtTargetSeconds: splitAtTargetSeconds
+            splitAtTargetSeconds: splitAtTargetSeconds,
+            isPass: false
         )
         let nextIndex = legIndex + 1
         if nextIndex < newLegs.count {
@@ -63,7 +64,67 @@ final class MockEkidenStateHolder {
                 actualDistanceKm: nil,
                 elapsedSeconds: nil,
                 isUnderTarget: false,
-                splitAtTargetSeconds: nil
+                splitAtTargetSeconds: nil,
+                isPass: false
+            )
+        }
+        let newEntry = EkidenEntry(
+            id: state.entry.id,
+            teamId: state.entry.teamId,
+            eventId: state.entry.eventId,
+            ownerUid: state.entry.ownerUid,
+            currentLegIndex: min(nextIndex, newLegs.count - 1),
+            tasukiState: nextIndex < newLegs.count ? "ready" : "finished",
+            createdAt: state.entry.createdAt,
+            updatedAt: now
+        )
+        let newState = EkidenViewState(
+            event: state.event,
+            entry: newEntry,
+            legs: newLegs,
+            memberNames: state.memberNames,
+            provisionalRank: state.provisionalRank,
+            totalTeams: state.totalTeams
+        )
+        stateByTeam[teamId] = newState
+        return newState
+    }
+
+    func applyPassTasuki(teamId: String, legIndex: Int, submittedByUid: String) -> EkidenViewState? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard var state = stateByTeam[teamId],
+              legIndex < state.legs.count,
+              state.legs[legIndex].status == .ready else {
+            return nil
+        }
+        let now = Date()
+        var newLegs = state.legs
+        newLegs[legIndex] = EkidenLeg(
+            id: legIndex,
+            assignedUid: newLegs[legIndex].assignedUid,
+            targetKm: newLegs[legIndex].targetKm,
+            status: .submitted,
+            submittedAt: now,
+            actualDistanceKm: 0,
+            elapsedSeconds: 0,
+            isUnderTarget: false,
+            splitAtTargetSeconds: nil,
+            isPass: true
+        )
+        let nextIndex = legIndex + 1
+        if nextIndex < newLegs.count {
+            newLegs[nextIndex] = EkidenLeg(
+                id: nextIndex,
+                assignedUid: newLegs[nextIndex].assignedUid,
+                targetKm: newLegs[nextIndex].targetKm,
+                status: .ready,
+                submittedAt: nil,
+                actualDistanceKm: nil,
+                elapsedSeconds: nil,
+                isUnderTarget: false,
+                splitAtTargetSeconds: nil,
+                isPass: false
             )
         }
         let newEntry = EkidenEntry(
@@ -107,7 +168,8 @@ final class MockEkidenStateHolder {
             actualDistanceKm: leg.actualDistanceKm,
             elapsedSeconds: leg.elapsedSeconds,
             isUnderTarget: leg.isUnderTarget,
-            splitAtTargetSeconds: leg.splitAtTargetSeconds
+            splitAtTargetSeconds: leg.splitAtTargetSeconds,
+            isPass: leg.isPass
         )
         let newState = EkidenViewState(
             event: state.event,
@@ -166,7 +228,8 @@ final class EkidenDataService {
             legs: legsDef,
             status: .active,
             rulesText: nil,
-            createdAt: startAt
+            createdAt: startAt,
+            teamGoalKm: 100
         )
 
         let memberUids: [String]
@@ -220,7 +283,7 @@ final class EkidenDataService {
                 elapsed = 25 * 60  // 25分（未達）
                 isUnder = true
             case 2:
-                status = .ready  // 襷渡し済み・提出可能
+                status = .ready  // TASUKI渡し済み・提出可能
                 submittedAt = nil
                 actualKm = nil
                 elapsed = nil
@@ -242,7 +305,8 @@ final class EkidenDataService {
                 actualDistanceKm: actualKm,
                 elapsedSeconds: elapsed,
                 isUnderTarget: isUnder,
-                splitAtTargetSeconds: nil
+                splitAtTargetSeconds: nil,
+                isPass: false
             ))
         }
 
@@ -356,6 +420,7 @@ final class EkidenDataService {
     ///   - elapsedSeconds: 経過時間（秒）
     ///   - isUnderTarget: 目標距離未達か
     ///   - splitAtTargetSeconds: 超過時の目標距離通過タイム（オプション）
+    ///   - totalLegCount: 今回のイベントで走る総区間数（最大10人・各1回）
     ///   - submittedByUid: 提出者UID
     ///   - isSampleTeam: サンプルチームの場合 true
     ///   - source: 提出ソース ("health_kit" | "manual" | "app_record")
@@ -369,6 +434,7 @@ final class EkidenDataService {
         elapsedSeconds: Double,
         isUnderTarget: Bool,
         splitAtTargetSeconds: Double?,
+        totalLegCount: Int,
         submittedByUid: String,
         isSampleTeam: Bool,
         source: String = "manual",
@@ -394,6 +460,7 @@ final class EkidenDataService {
             elapsedSeconds: elapsedSeconds,
             isUnderTarget: isUnderTarget,
             splitAtTargetSeconds: splitAtTargetSeconds,
+            totalLegCount: totalLegCount,
             submittedByUid: submittedByUid,
             source: source,
             runActivityId: runActivityId
@@ -418,7 +485,7 @@ final class EkidenDataService {
             splitAtTargetSeconds: splitAtTargetSeconds,
             submittedByUid: submittedByUid
         ) != nil else {
-            return .failure(NSError(domain: "EkidenDataService", code: -1, userInfo: [NSLocalizedDescriptionKey: "提出に失敗しました（襷状態の不一致など）"]))
+            return .failure(NSError(domain: "EkidenDataService", code: -1, userInfo: [NSLocalizedDescriptionKey: "提出に失敗しました（TASUKI状態の不一致など）"]))
         }
         return .success(())
     }
@@ -432,6 +499,7 @@ final class EkidenDataService {
         elapsedSeconds: Double,
         isUnderTarget: Bool,
         splitAtTargetSeconds: Double?,
+        totalLegCount: Int,
         submittedByUid: String,
         source: String = "manual",
         runActivityId: String? = nil
@@ -466,14 +534,15 @@ final class EkidenDataService {
                     transaction.updateData(["status": EkidenLegStatus.ready.rawValue], forDocument: nextLegDoc)
                 }
 
-                let tasukiState = nextIndex < 10 ? "ready" : "finished"
+                let hasNextRunner = nextIndex < totalLegCount
+                let tasukiState = hasNextRunner ? "ready" : "finished"
                 transaction.updateData([
-                    "currentLegIndex": nextIndex,
+                    "currentLegIndex": min(nextIndex, max(totalLegCount - 1, 0)),
                     "tasukiState": tasukiState,
                     "updatedAt": Timestamp(date: now)
                 ], forDocument: entryRef)
 
-                let submissionRef = db.collection("ekiden_entries").document(entryId)
+                let submissionRef = self.db.collection("ekiden_entries").document(entryId)
                     .collection("submissions").document()
                 var subData: [String: Any] = [
                     "legIndex": legIndex,
@@ -498,7 +567,111 @@ final class EkidenDataService {
             }
         }
     }
-}
+
+    /// TASUKIを走らずに次の担当へ渡す（TASUKIをつなぐ）。距離加算なしでTASUKIのみ進行
+    /// - Parameters:
+    ///   - teamId: チームID
+    ///   - entryId: エントリーID
+    ///   - legIndex: TASUKI保持中の区間インデックス（status == .ready の区間）
+    ///   - totalLegCount: 今回のイベントで走る総区間数（最大10人・各1回）
+    ///   - submittedByUid: TASUKI保持者（実行者）のUID
+    ///   - isSampleTeam: サンプルチームの場合 true
+    func passTasuki(
+        teamId: String,
+        entryId: String,
+        legIndex: Int,
+        totalLegCount: Int,
+        submittedByUid: String,
+        isSampleTeam: Bool
+    ) async -> Result<Void, Error> {
+        if isSampleTeam || teamId.hasPrefix("example") {
+            guard MockEkidenStateHolder.shared.applyPassTasuki(
+                teamId: teamId,
+                legIndex: legIndex,
+                submittedByUid: submittedByUid
+            ) != nil else {
+                return .failure(NSError(domain: "EkidenDataService", code: -1, userInfo: [NSLocalizedDescriptionKey: "TASUKIを渡せません（TASUKI保持者がいないか、期間外です）"]))
+            }
+            return .success(())
+        }
+        return await passTasukiFirestore(
+            teamId: teamId,
+            entryId: entryId,
+            legIndex: legIndex,
+            totalLegCount: totalLegCount,
+            submittedByUid: submittedByUid
+        )
+    }
+
+    private func passTasukiFirestore(
+        teamId: String,
+        entryId: String,
+        legIndex: Int,
+        totalLegCount: Int,
+        submittedByUid: String
+    ) async -> Result<Void, Error> {
+        let now = Date()
+        let legsRef = db.collection("ekiden_entries").document(entryId).collection("legs")
+        let entryRef = db.collection("ekiden_entries").document(entryId)
+        let legRef = legsRef.document("\(legIndex)")
+
+        return await withCheckedContinuation { continuation in
+            db.runTransaction({ transaction, errorPtr in
+                guard let legSnap = try? transaction.getDocument(legRef),
+                      let legData = legSnap.data(),
+                      (legData["status"] as? String) == EkidenLegStatus.ready.rawValue,
+                      (legData["assignedUid"] as? String) == submittedByUid else {
+                    errorPtr?.pointee = NSError(domain: "EkidenDataService", code: -1, userInfo: [NSLocalizedDescriptionKey: "TASUKIを渡せません（TASUKI保持者ではありません）"])
+                    return nil
+                }
+                var updateData: [String: Any] = [
+                    "status": EkidenLegStatus.submitted.rawValue,
+                    "submittedAt": Timestamp(date: now),
+                    "actualDistanceKm": 0,
+                    "elapsedSeconds": 0,
+                    "isUnderTarget": false,
+                    "isPass": true
+                ]
+                transaction.updateData(updateData, forDocument: legRef)
+
+                let nextIndex = legIndex + 1
+                let nextLegRef = legsRef.document("\(nextIndex)")
+                if let nextSnap = try? transaction.getDocument(nextLegRef), nextSnap.exists {
+                    transaction.updateData(["status": EkidenLegStatus.ready.rawValue], forDocument: nextLegRef)
+                }
+
+                let hasNextRunner = nextIndex < totalLegCount
+                let tasukiState = hasNextRunner ? "ready" : "finished"
+                transaction.updateData([
+                    "currentLegIndex": min(nextIndex, max(totalLegCount - 1, 0)),
+                    "tasukiState": tasukiState,
+                    "updatedAt": Timestamp(date: now)
+                ], forDocument: entryRef)
+
+                let submissionRef = self.db.collection("ekiden_entries").document(entryId)
+                    .collection("submissions").document()
+                let subData: [String: Any] = [
+                    "legIndex": legIndex,
+                    "submittedByUid": submittedByUid,
+                    "submittedAt": Timestamp(date: now),
+                    "source": "pass",
+                    "actualDistanceKm": 0,
+                    "elapsedSeconds": 0,
+                    "isUnderTarget": false,
+                    "isPass": true
+                ]
+                transaction.setData(subData, forDocument: submissionRef)
+
+                return true
+            }) { _, error in
+                if let error = error {
+                    continuation.resume(returning: .failure(error))
+                } else {
+                    continuation.resume(returning: .success(()))
+                }
+            }
+        }
+    }
 
     /// 区間担当者を変更（代走: オーナー承認）
     /// - Parameters:
@@ -544,7 +717,7 @@ final class EkidenDataService {
     }
 }
 
-/// TeamView 用の駅伝表示状態
+// MARK: - TeamView 用の駅伝表示状態
 struct EkidenViewState {
     let event: EkidenEvent
     let entry: EkidenEntry
@@ -558,18 +731,18 @@ struct EkidenViewState {
         event.isWithinEventWindow
     }
 
-    /// 襷を持っている（提出可能な）区間の担当者 UID
+    /// TASUKIを持っている（提出可能な）区間の担当者 UID
     var tasukiHolderUid: String? {
         legs.first { $0.status == .ready }?.assignedUid
     }
 
-    /// 襷を持っている担当者の表示名
+    /// TASUKIを持っている担当者の表示名
     func tasukiHolderName() -> String? {
         guard let uid = tasukiHolderUid else { return nil }
         return memberNames[uid] ?? uid
     }
 
-    /// 次走者（襷が渡っている人）の表示名
+    /// 次走者（TASUKIが渡っている人）の表示名
     func nextRunnerName() -> String? {
         tasukiHolderName()
     }
@@ -577,6 +750,23 @@ struct EkidenViewState {
     /// 提出済み区間数
     var submittedLegCount: Int {
         legs.filter { $0.status == .submitted }.count
+    }
+
+    /// チーム累計走行距離（km）。提出済み区間の actualDistanceKm の合計。パス（isPass）区間は除外
+    var cumulativeDistanceKm: Double {
+        legs.filter { $0.status == .submitted && !($0.isPass) }
+            .compactMap { $0.actualDistanceKm }
+            .reduce(0, +)
+    }
+
+    /// チーム目標距離（km）。累計モード用。未設定なら legCount * 5 をデフォルト
+    var teamGoalKm: Double {
+        event.teamGoalKm ?? Double(event.legCount) * 5.0
+    }
+
+    /// 累計モードか（teamGoalKm が設定されている場合 true）
+    var isCumulativeMode: Bool {
+        event.teamGoalKm != nil
     }
 
     /// 総合タイム（秒）
