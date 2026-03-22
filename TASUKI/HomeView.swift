@@ -179,12 +179,14 @@ struct HomeView: View {
                         suffix: "pt",
                         icon: "flame.fill"
                     )
-                    quickMetricCard(
-                        title: "DATA SOURCE",
-                        value: selectedRunningDataSource.displayName,
-                        suffix: "",
-                        icon: "waveform.path.ecg"
-                    )
+                    NavigationLink(destination: CoachView()) {
+                        quickActionCard(
+                            title: "COACH",
+                            subtitle: "コーチ・プラン",
+                            icon: "graduationcap.fill"
+                        )
+                    }
+                    .buttonStyle(.plain)
                 }
 
                 HStack(spacing: 10) {

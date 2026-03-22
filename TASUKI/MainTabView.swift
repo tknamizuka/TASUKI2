@@ -10,9 +10,7 @@ struct MainTabView: View {
         ("house.fill", "Home"),
         ("figure.run", "Run"),
         ("magnifyingglass", "Find"),
-        ("stopwatch.fill", "Time"),
         ("person.3.fill", "EKIDEN"),
-        ("graduationcap.fill", "Coach"),
         ("person.fill", "Me")
     ]
     
@@ -25,18 +23,12 @@ struct MainTabView: View {
                         .environmentObject(unreadProvider)
                 }
             case 1:
-                NavigationStack {
-                    RunRecordingView()
-                }
+                SoloRunHubView()
             case 2:
                 FindView()
             case 3:
-                TimeTrialEntryView()
-            case 4:
                 TeamView()
-            case 5:
-                CoachView()
-            case 6:
+            case 4:
                 MyProfileView()
             default:
                 NavigationStack { HomeView().environmentObject(unreadProvider) }

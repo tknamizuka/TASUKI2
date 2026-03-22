@@ -2,7 +2,8 @@
 
 const admin = require("firebase-admin");
 const {onSchedule} = require("firebase-functions/v2/scheduler");
-const {onDocumentUpdated} = require("firebase-functions/v2/firestore");
+const {onDocumentUpdated, onDocumentCreated} = require("firebase-functions/v2/firestore");
+const {onCall, HttpsError} = require("firebase-functions/v2/https");
 const {logger} = require("firebase-functions");
 
 admin.initializeApp();
@@ -440,5 +441,241 @@ exports.aggregateBehaviorFeaturesDaily = onSchedule(
       }
 
       logger.info("behavior aggregation completed", {targetDateKey});
+    },
+);
+
+// MARK: - Ekiden: 提出受理・重複防止・順位計算
+
+const EKIDEN_LEG_STATUS = {
+  AWAITING: "awaitingTasuki",
+  READY: "ready",
+  SUBMITTED: "submitted",
+};
+
+/**
+ * 駅伝区間提出（Callable）: 期間内・担当者・襷状態・重複防止を検証してから書き込み
+ */
+exports.submitEkidenLeg = onCall(
+    {
+      region: "asia-northeast1",
+      memory: "512MiB",
+    },
+    async (request) => {
+      if (!request.auth) {
+        throw new HttpsError("unauthenticated", "ログインが必要です");
+      }
+      const uid = request.auth.uid;
+      const data = request.data;
+      if (!data || typeof data.entryId !== "string" || typeof data.legIndex !== "number") {
+        throw new HttpsError("invalid-argument", "entryId, legIndex が必須です");
+      }
+      const {
+        entryId,
+        legIndex,
+        actualDistanceKm,
+        elapsedSeconds,
+        isUnderTarget,
+        splitAtTargetSeconds,
+        source = "manual",
+        runActivityId,
+      } = data;
+
+      if (typeof actualDistanceKm !== "number" || typeof elapsedSeconds !== "number" ||
+          typeof isUnderTarget !== "boolean") {
+        throw new HttpsError("invalid-argument", "actualDistanceKm, elapsedSeconds, isUnderTarget が必須です");
+      }
+
+      const entryRef = db.collection("ekiden_entries").doc(entryId);
+      const entrySnap = await entryRef.get();
+      if (!entrySnap.exists) {
+        throw new HttpsError("not-found", "エントリーが見つかりません");
+      }
+      const entryData = entrySnap.data();
+      const eventId = entryData.eventId;
+      const teamId = entryData.teamId;
+      const eventRef = db.collection("ekiden_events").doc(eventId);
+      const eventSnap = await eventRef.get();
+      if (!eventSnap.exists) {
+        throw new HttpsError("not-found", "イベントが見つかりません");
+      }
+      const eventData = eventSnap.data();
+      const now = new Date();
+      const startAt = eventData.startAt?.toDate?.() ?? new Date(0);
+      const endAt = eventData.endAt?.toDate?.() ?? new Date(9999, 11, 31);
+      if (now < startAt || now > endAt) {
+        throw new HttpsError("failed-precondition", "イベント期間外です");
+      }
+
+      const legRef = entryRef.collection("legs").doc(String(legIndex));
+      const legSnap = await legRef.get();
+      if (!legSnap.exists) {
+        throw new HttpsError("not-found", "区間が見つかりません");
+      }
+      const legData = legSnap.data();
+      if (legData.status === EKIDEN_LEG_STATUS.SUBMITTED) {
+        throw new HttpsError("failed-precondition", "既に提出済みです（重複提出防止）");
+      }
+      if (legData.status !== EKIDEN_LEG_STATUS.READY) {
+        throw new HttpsError("failed-precondition", "襷が渡っていません。前区間の提出を待ってください");
+      }
+      const assignedUid = legData.assignedUid;
+      if (assignedUid && assignedUid !== uid) {
+        throw new HttpsError("permission-denied", "この区間の担当者ではありません");
+      }
+
+      const legsRef = entryRef.collection("legs");
+      const submissionRef = entryRef.collection("submissions").doc();
+      const nextLegRef = legsRef.doc(String(legIndex + 1));
+
+      const ts = admin.firestore.Timestamp.fromDate(now);
+      const legUpdate = {
+        status: EKIDEN_LEG_STATUS.SUBMITTED,
+        submittedAt: ts,
+        actualDistanceKm,
+        elapsedSeconds,
+        isUnderTarget,
+      };
+      if (typeof splitAtTargetSeconds === "number") legUpdate.splitAtTargetSeconds = splitAtTargetSeconds;
+
+      const subData = {
+        legIndex,
+        submittedByUid: uid,
+        submittedAt: ts,
+        source: source || "manual",
+        actualDistanceKm,
+        elapsedSeconds,
+        isUnderTarget,
+      };
+      if (splitAtTargetSeconds != null) subData.splitAtTargetSeconds = splitAtTargetSeconds;
+      if (runActivityId) subData.runActivityId = runActivityId;
+
+      await db.runTransaction(async (tx) => {
+        tx.update(legRef, legUpdate);
+
+        const nextSnap = await tx.get(nextLegRef);
+        if (nextSnap.exists) {
+          tx.update(nextLegRef, {status: EKIDEN_LEG_STATUS.READY});
+        }
+
+        const nextIndex = legIndex + 1;
+        const tasukiState = nextIndex < 10 ? "ready" : "finished";
+        tx.update(entryRef, {
+          currentLegIndex: nextIndex,
+          tasukiState,
+          updatedAt: ts,
+        });
+
+        tx.set(submissionRef, subData);
+      });
+
+      logger.info("ekiden leg submitted", {
+        entryId,
+        legIndex,
+        uid,
+        actualDistanceKm,
+        elapsedSeconds,
+      });
+
+      return {success: true};
+    },
+);
+
+/**
+ * 駅伝提出時に順位を再計算
+ */
+async function recalcEkidenRanking(entryId) {
+  const entryRef = db.collection("ekiden_entries").doc(entryId);
+  const entrySnap = await entryRef.get();
+  if (!entrySnap.exists) return;
+  const entryData = entrySnap.data();
+  const eventId = entryData.eventId;
+  const teamId = entryData.teamId;
+
+  const legsSnap = await entryRef.collection("legs").get();
+  let totalElapsedSeconds = 0;
+  for (const legDoc of legsSnap.docs) {
+    const d = legDoc.data();
+    if (d.status !== EKIDEN_LEG_STATUS.SUBMITTED) continue;
+    const sec = d.splitAtTargetSeconds ?? d.elapsedSeconds;
+    if (typeof sec === "number") totalElapsedSeconds += sec;
+  }
+
+  const rankingRef = db.collection("ekiden_events").doc(eventId)
+      .collection("rankings").doc(entryId);
+  await rankingRef.set({
+    teamId,
+    entryId,
+    totalElapsedSeconds,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, {merge: true});
+}
+
+/**
+ * 区間完了時にチームチャットへ自動通知
+ */
+async function notifyTeamChatOnLegSubmit(teamId, entryId, legIndex, submittedByUid, elapsedSeconds, isUnderTarget) {
+  const userSnap = await db.collection("users").doc(submittedByUid).get();
+  const runnerName = userSnap.exists && userSnap.data()?.name ?
+      userSnap.data().name : "メンバー";
+
+  const m = Math.floor(elapsedSeconds / 60);
+  const s = Math.floor(elapsedSeconds % 60);
+  const timeStr = `${m}:${String(s).padStart(2, "0")}`;
+  const underText = isUnderTarget ? "（未達）" : "";
+  const content = `${legIndex + 1}区 完了！${runnerName}さん ${timeStr}${underText}`;
+
+  await db.collection("teams").doc(teamId).collection("teamChat").add({
+    senderId: "system",
+    senderName: "駅伝",
+    content,
+    timestamp: admin.firestore.FieldValue.serverTimestamp(),
+    isSystem: true,
+    ekidenEntryId: entryId,
+    legIndex,
+  });
+}
+
+exports.onEkidenSubmissionCreated = onDocumentCreated(
+    {
+      document: "ekiden_entries/{entryId}/submissions/{submissionId}",
+      region: "asia-northeast1",
+      memory: "256MiB",
+    },
+    async (event) => {
+      const entryId = event.params.entryId;
+      if (!entryId) return;
+
+      const snap = event.data;
+      if (!snap || !snap.data) return;
+      const subData = snap.data();
+      const legIndex = subData.legIndex ?? -1;
+      const submittedByUid = subData.submittedByUid ?? "";
+      const elapsedSeconds = subData.elapsedSeconds ?? 0;
+      const isUnderTarget = subData.isUnderTarget ?? false;
+
+      try {
+        await recalcEkidenRanking(entryId);
+        logger.info("ekiden ranking recalculated", {entryId});
+
+        const entrySnap = await db.collection("ekiden_entries").doc(entryId).get();
+        if (entrySnap.exists) {
+          const teamId = entrySnap.data()?.teamId;
+          if (teamId) {
+            await notifyTeamChatOnLegSubmit(
+                teamId,
+                entryId,
+                legIndex,
+                submittedByUid,
+                elapsedSeconds,
+                isUnderTarget,
+            );
+          }
+        }
+      } catch (err) {
+        logger.error("ekiden submission handler failed", {
+          entryId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     },
 );

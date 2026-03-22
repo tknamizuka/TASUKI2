@@ -8,6 +8,22 @@
 import Foundation
 import FirebaseFirestore
 
+// MARK: - Firestore Collection Paths
+
+/// Firestore コレクション・パス定数
+enum EkidenFirestorePaths {
+    static let events = "ekiden_events"
+    static let entries = "ekiden_entries"
+    static let legs = "legs"
+    static let submissions = "submissions"
+    static let rankings = "rankings"
+
+    static func event(_ eventId: String) -> String { "\(events)/\(eventId)" }
+    static func entry(_ entryId: String) -> String { "\(entries)/\(entryId)" }
+    static func entryLegs(_ entryId: String) -> String { "\(entries)/\(entryId)/\(legs)" }
+    static func entrySubmissions(_ entryId: String) -> String { "\(entries)/\(entryId)/\(submissions)" }
+}
+
 // MARK: - Ekiden Event Status
 
 /// 駅伝イベントのステータス

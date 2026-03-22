@@ -87,6 +87,39 @@ final class MockEkidenStateHolder {
         stateByTeam[teamId] = newState
         return newState
     }
+
+    func updateLegAssignment(teamId: String, legIndex: Int, newAssignedUid: String?) -> EkidenViewState? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard var state = stateByTeam[teamId],
+              legIndex < state.legs.count,
+              state.legs[legIndex].status != .submitted else {
+            return nil
+        }
+        var newLegs = state.legs
+        let leg = newLegs[legIndex]
+        newLegs[legIndex] = EkidenLeg(
+            id: leg.id,
+            assignedUid: newAssignedUid,
+            targetKm: leg.targetKm,
+            status: leg.status,
+            submittedAt: leg.submittedAt,
+            actualDistanceKm: leg.actualDistanceKm,
+            elapsedSeconds: leg.elapsedSeconds,
+            isUnderTarget: leg.isUnderTarget,
+            splitAtTargetSeconds: leg.splitAtTargetSeconds
+        )
+        let newState = EkidenViewState(
+            event: state.event,
+            entry: state.entry,
+            legs: newLegs,
+            memberNames: state.memberNames,
+            provisionalRank: state.provisionalRank,
+            totalTeams: state.totalTeams
+        )
+        stateByTeam[teamId] = newState
+        return newState
+    }
 }
 
 /// 駅伝データ取得サービス
@@ -325,6 +358,8 @@ final class EkidenDataService {
     ///   - splitAtTargetSeconds: 超過時の目標距離通過タイム（オプション）
     ///   - submittedByUid: 提出者UID
     ///   - isSampleTeam: サンプルチームの場合 true
+    ///   - source: 提出ソース ("health_kit" | "manual" | "app_record")
+    ///   - runActivityId: HealthKit 等の記録ID（オプション）
     func submitLeg(
         teamId: String,
         entryId: String,
@@ -335,7 +370,9 @@ final class EkidenDataService {
         isUnderTarget: Bool,
         splitAtTargetSeconds: Double?,
         submittedByUid: String,
-        isSampleTeam: Bool
+        isSampleTeam: Bool,
+        source: String = "manual",
+        runActivityId: String? = nil
     ) async -> Result<Void, Error> {
         if isSampleTeam || teamId.hasPrefix("example") {
             return await submitLegMock(
@@ -357,7 +394,9 @@ final class EkidenDataService {
             elapsedSeconds: elapsedSeconds,
             isUnderTarget: isUnderTarget,
             splitAtTargetSeconds: splitAtTargetSeconds,
-            submittedByUid: submittedByUid
+            submittedByUid: submittedByUid,
+            source: source,
+            runActivityId: runActivityId
         )
     }
 
@@ -393,40 +432,38 @@ final class EkidenDataService {
         elapsedSeconds: Double,
         isUnderTarget: Bool,
         splitAtTargetSeconds: Double?,
-        submittedByUid: String
+        submittedByUid: String,
+        source: String = "manual",
+        runActivityId: String? = nil
     ) async -> Result<Void, Error> {
         let now = Date()
         let legsRef = db.collection("ekiden_entries").document(entryId).collection("legs")
         let entryRef = db.collection("ekiden_entries").document(entryId)
 
         return await withCheckedContinuation { continuation in
-            db.runTransaction { transaction, errorPtr in
-                if let error = errorPtr?.pointee {
-                    continuation.resume(returning: .failure(error))
-                    return nil
-                }
+            db.runTransaction({ transaction, errorPtr in
                 let legDoc = legsRef.document("\(legIndex)")
                 guard let legSnap = try? transaction.getDocument(legDoc),
                       let legData = legSnap.data(),
                       (legData["status"] as? String) == EkidenLegStatus.ready.rawValue else {
-                    continuation.resume(returning: .failure(NSError(domain: "EkidenDataService", code: -1, userInfo: [NSLocalizedDescriptionKey: "提出可能な状態ではありません"])))
+                    let err = NSError(domain: "EkidenDataService", code: -1, userInfo: [NSLocalizedDescriptionKey: "提出可能な状態ではありません"])
+                    errorPtr?.pointee = err
                     return nil
                 }
-                transaction.updateData([
+                var updateData: [String: Any] = [
                     "status": EkidenLegStatus.submitted.rawValue,
                     "submittedAt": Timestamp(date: now),
                     "actualDistanceKm": actualDistanceKm,
                     "elapsedSeconds": elapsedSeconds,
-                    "isUnderTarget": isUnderTarget,
-                    "splitAtTargetSeconds": splitAtTargetSeconds ?? NSNull()
-                ], forDocument: legDoc)
+                    "isUnderTarget": isUnderTarget
+                ]
+                if let s = splitAtTargetSeconds { updateData["splitAtTargetSeconds"] = s }
+                transaction.updateData(updateData, forDocument: legDoc)
 
                 let nextIndex = legIndex + 1
                 let nextLegDoc = legsRef.document("\(nextIndex)")
                 if let nextSnap = try? transaction.getDocument(nextLegDoc), nextSnap.exists {
-                    transaction.updateData([
-                        "status": EkidenLegStatus.ready.rawValue
-                    ], forDocument: nextLegDoc)
+                    transaction.updateData(["status": EkidenLegStatus.ready.rawValue], forDocument: nextLegDoc)
                 }
 
                 let tasukiState = nextIndex < 10 ? "ready" : "finished"
@@ -438,21 +475,71 @@ final class EkidenDataService {
 
                 let submissionRef = db.collection("ekiden_entries").document(entryId)
                     .collection("submissions").document()
-                transaction.setData([
+                var subData: [String: Any] = [
                     "legIndex": legIndex,
                     "submittedByUid": submittedByUid,
                     "submittedAt": Timestamp(date: now),
-                    "source": "manual",
-                    "runActivityId": nil as String?,
+                    "source": source,
                     "actualDistanceKm": actualDistanceKm,
                     "elapsedSeconds": elapsedSeconds,
-                    "isUnderTarget": isUnderTarget,
-                    "splitAtTargetSeconds": splitAtTargetSeconds ?? NSNull()
-                ] as [String: Any], forDocument: submissionRef)
+                    "isUnderTarget": isUnderTarget
+                ]
+                if let s = splitAtTargetSeconds { subData["splitAtTargetSeconds"] = s }
+                if let rid = runActivityId { subData["runActivityId"] = rid }
+                transaction.setData(subData, forDocument: submissionRef)
 
-                continuation.resume(returning: .success(()))
-                return nil
+                return true
+            }) { _, error in
+                if let error = error {
+                    continuation.resume(returning: .failure(error))
+                } else {
+                    continuation.resume(returning: .success(()))
+                }
             }
+        }
+    }
+}
+
+    /// 区間担当者を変更（代走: オーナー承認）
+    /// - Parameters:
+    ///   - teamId: チームID（サンプル時はモック更新に使用）
+    ///   - entryId: エントリーID
+    ///   - legIndex: 区間インデックス
+    ///   - newAssignedUid: 新しい担当者UID
+    ///   - isSampleTeam: サンプルチームの場合 true
+    func updateLegAssignment(
+        teamId: String,
+        entryId: String,
+        legIndex: Int,
+        newAssignedUid: String?,
+        isSampleTeam: Bool
+    ) async -> Result<Void, Error> {
+        if isSampleTeam || teamId.hasPrefix("example") {
+            if MockEkidenStateHolder.shared.updateLegAssignment(teamId: teamId, legIndex: legIndex, newAssignedUid: newAssignedUid) != nil {
+                return .success(())
+            }
+            return .success(())  // モック更新失敗時も成功扱い（UI更新で再取得）
+        }
+        let legRef = db.collection("ekiden_entries").document(entryId)
+            .collection("legs").document("\(legIndex)")
+        do {
+            let snap = try await legRef.getDocument()
+            guard snap.exists, let data = snap.data() else {
+                return .failure(NSError(domain: "EkidenDataService", code: -1, userInfo: [NSLocalizedDescriptionKey: "区間が見つかりません"]))
+            }
+            if (data["status"] as? String) == EkidenLegStatus.submitted.rawValue {
+                return .failure(NSError(domain: "EkidenDataService", code: -1, userInfo: [NSLocalizedDescriptionKey: "提出済みの区間は変更できません"]))
+            }
+            var update: [String: Any] = [:]
+            if let uid = newAssignedUid {
+                update["assignedUid"] = uid
+            } else {
+                update["assignedUid"] = FieldValue.delete()
+            }
+            try await legRef.updateData(update)
+            return .success(())
+        } catch {
+            return .failure(error)
         }
     }
 }
